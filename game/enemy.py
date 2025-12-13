@@ -10,11 +10,12 @@ from game.stats import Stats, HealthBar
 from game.sprites import AnimatedSprite
 
 
-def _get_project_root():
-    """Возвращает путь к корню проекта"""
+def _get_base_path():
+    """Возвращает базовый путь (поддержка PyInstaller)"""
     import sys
     if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
+        # Запуск из exe — данные в _MEIPASS
+        return sys._MEIPASS
     return os.path.dirname(os.path.dirname(__file__))
 
 
@@ -25,7 +26,7 @@ def load_enemy_types_from_config():
     Returns:
         dict: Словарь типов врагов
     """
-    config_path = os.path.join(_get_project_root(), 'game', 'enemy_types.json')
+    config_path = os.path.join(_get_base_path(), 'game', 'enemy_types.json')
     
     if os.path.exists(config_path):
         try:

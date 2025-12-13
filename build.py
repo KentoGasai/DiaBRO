@@ -49,6 +49,9 @@ def build(version):
     # Путь к папке с изображениями
     images_path = os.path.join("game", "images")
     
+    # Путь к конфигу врагов
+    enemy_types_path = os.path.join("game", "enemy_types.json")
+    
     # Команда PyInstaller
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -57,6 +60,8 @@ def build(version):
         "--name", output_name,
         # Добавляем папку с изображениями
         "--add-data", f"{images_path};game/images",
+        # Добавляем конфиг типов врагов
+        "--add-data", f"{enemy_types_path};game",
         # Иконка (если есть)
         # "--icon", "icon.ico",
         "--clean",             # Очистка перед сборкой
