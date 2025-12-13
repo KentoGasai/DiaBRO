@@ -21,6 +21,9 @@ app = Flask(__name__,
 
 # Конфигурация
 ENEMY_SPRITES_DIR = PROJECT_ROOT / 'game' / 'images' / 'enemy'
+WEAPON_SPRITES_DIR = PROJECT_ROOT / 'game' / 'images' / 'weapon'
+TEXTURES_DIR = PROJECT_ROOT / 'game' / 'images' / 'textures'
+LEVELS_DIR = PROJECT_ROOT / 'game' / 'levels'
 ENEMY_CONFIG_FILE = PROJECT_ROOT / 'game' / 'enemy_types.json'
 ALLOWED_EXTENSIONS = {'png'}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max
@@ -29,6 +32,8 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Создаём директории если не существуют
 ENEMY_SPRITES_DIR.mkdir(parents=True, exist_ok=True)
+TEXTURES_DIR.mkdir(parents=True, exist_ok=True)
+LEVELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def allowed_file(filename):
@@ -51,12 +56,30 @@ def save_enemy_types(data):
 
 
 def get_available_sprites():
-    """Возвращает список доступных спрайтов"""
+    """Возвращает список доступных спрайтов врагов"""
     sprites = []
     if ENEMY_SPRITES_DIR.exists():
         for file in ENEMY_SPRITES_DIR.glob('*.png'):
             sprites.append(file.name)
     return sorted(sprites)
+
+
+def get_available_weapons():
+    """Возвращает список доступных спрайтов оружия"""
+    weapons = []
+    if WEAPON_SPRITES_DIR.exists():
+        for file in WEAPON_SPRITES_DIR.glob('*.png'):
+            weapons.append(file.name)
+    return sorted(weapons)
+
+
+def get_available_textures():
+    """Возвращает список доступных текстур для уровней"""
+    textures = []
+    if TEXTURES_DIR.exists():
+        for file in TEXTURES_DIR.glob('*.png'):
+            textures.append(file.name)
+    return sorted(textures)
 
 
 @app.route('/')
@@ -70,9 +93,11 @@ def get_enemy_types():
     """Получить все типы врагов"""
     enemy_types = load_enemy_types()
     sprites = get_available_sprites()
+    weapons = get_available_weapons()
     return jsonify({
         'enemy_types': enemy_types,
-        'available_sprites': sprites
+        'available_sprites': sprites,
+        'available_weapons': weapons
     })
 
 
@@ -101,10 +126,13 @@ def create_enemy_type():
     
     # sprite_scale: 1.0 = размер игрока (256px)
     # speed: 6.0 = немного медленнее игрока (8.0)
+    weapon_offset = data.get('weapon_offset', [0, 0])
+    
     enemy_types[enemy_id] = {
         'name': data.get('name', enemy_id),
         'sprite_path': data.get('sprite_path', ''),
         'weapon_path': data.get('weapon_path', ''),
+        'weapon_offset': weapon_offset,  # Смещение оружия [x, y]
         'projectile_path': data.get('projectile_path', ''),
         'sprite_scale': float(data.get('sprite_scale', 1.0)),
         'max_health': int(data.get('max_health', 30)),
@@ -136,6 +164,7 @@ def update_enemy_type(enemy_id):
         'name': data.get('name', enemy_types[enemy_id].get('name', enemy_id)),
         'sprite_path': data.get('sprite_path', enemy_types[enemy_id].get('sprite_path', '')),
         'weapon_path': data.get('weapon_path', enemy_types[enemy_id].get('weapon_path', '')),
+        'weapon_offset': data.get('weapon_offset', enemy_types[enemy_id].get('weapon_offset', [0, 0])),
         'projectile_path': data.get('projectile_path', enemy_types[enemy_id].get('projectile_path', '')),
         'sprite_scale': float(data.get('sprite_scale', enemy_types[enemy_id].get('sprite_scale', 1.0))),
         'max_health': int(data.get('max_health', enemy_types[enemy_id].get('max_health', 30))),
@@ -212,6 +241,12 @@ def get_player_sprite():
     return jsonify({'error': 'Спрайт игрока не найден'}), 404
 
 
+@app.route('/api/weapons/<filename>')
+def get_weapon_sprite(filename):
+    """Получить спрайт оружия для предпросмотра"""
+    return send_from_directory(str(WEAPON_SPRITES_DIR), filename)
+
+
 @app.route('/api/delete-sprite/<filename>', methods=['DELETE'])
 def delete_sprite(filename):
     """Удалить спрайт"""
@@ -256,6 +291,87 @@ def export_code():
     code_lines.append("}")
     
     return jsonify({'code': '\n'.join(code_lines)})
+
+
+# ========================================
+# API для текстур уровней
+# ========================================
+
+@app.route('/api/textures', methods=['GET'])
+def get_textures():
+    """Получить список текстур"""
+    textures = get_available_textures()
+    return jsonify({'textures': textures})
+
+
+@app.route('/api/textures/<filename>')
+def get_texture(filename):
+    """Получить текстуру для предпросмотра"""
+    return send_from_directory(str(TEXTURES_DIR), filename)
+
+
+@app.route('/api/textures', methods=['POST'])
+def upload_texture():
+    """Загрузить новую текстуру"""
+    if 'texture' not in request.files:
+        return jsonify({'error': 'Файл не выбран'}), 400
+    
+    file = request.files['texture']
+    
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+    
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Разрешены только PNG файлы'}), 400
+    
+    filename = secure_filename(file.filename)
+    filepath = TEXTURES_DIR / filename
+    
+    file.save(str(filepath))
+    
+    return jsonify({
+        'success': True, 
+        'filename': filename,
+        'path': f'game/images/textures/{filename}'
+    })
+
+
+@app.route('/api/textures/<filename>', methods=['DELETE'])
+def delete_texture(filename):
+    """Удалить текстуру"""
+    filepath = TEXTURES_DIR / secure_filename(filename)
+    
+    if filepath.exists():
+        filepath.unlink()
+        return jsonify({'success': True})
+    
+    return jsonify({'error': 'Файл не найден'}), 404
+
+
+# ========================================
+# API для уровней
+# ========================================
+
+@app.route('/api/levels', methods=['GET'])
+def get_levels():
+    """Получить список уровней"""
+    levels = []
+    if LEVELS_DIR.exists():
+        for file in LEVELS_DIR.glob('*.json'):
+            levels.append(file.stem)
+    return jsonify({'levels': sorted(levels)})
+
+
+@app.route('/api/levels/<level_name>', methods=['GET'])
+def get_level(level_name):
+    """Получить данные уровня"""
+    level_file = LEVELS_DIR / f"{level_name}.json"
+    
+    if level_file.exists():
+        with open(level_file, 'r', encoding='utf-8') as f:
+            return jsonify(json.load(f))
+    
+    return jsonify({'error': 'Уровень не найден'}), 404
 
 
 if __name__ == '__main__':

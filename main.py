@@ -13,6 +13,8 @@ from game.camera import Camera
 from game.combat import CombatSystem
 from game.location import Location, LocationManager
 from game.enemy import Enemy, create_enemy, get_enemy_types, reload_enemy_types
+from game.level import LevelManager
+from game.fog_of_war import FogOfWar
 
 # Константы
 SCREEN_WIDTH = 1280
@@ -54,9 +56,19 @@ class Game:
         self.player = Player(x=0, y=0, speed=8.0, max_health=100, max_mana=100)
         self.combat_system = CombatSystem()
         
+        # Снаряды врагов
+        self.enemy_projectiles = []
+        
         # Создание локаций
         self.location_manager = LocationManager()
         self._setup_locations()
+        
+        # Менеджер уровней (тайловые карты)
+        self.level_manager = LevelManager()
+        self._load_default_level()
+        
+        # Туман войны
+        self.fog_of_war = FogOfWar(SCREEN_WIDTH, SCREEN_HEIGHT)
         
         # Миникарта (создаём поверхность один раз!)
         self.minimap_size = 150
@@ -74,12 +86,18 @@ class Game:
         # Меню паузы
         self.menu_items = [
             {"text": "Продолжить", "action": self._resume_game},
+            {"text": "Уровни ▶", "action": self._open_level_submenu},
             {"text": "Противники ▶", "action": self._open_enemy_submenu},
             {"text": "Убить всех врагов", "action": self._kill_all_enemies},
             {"text": "Перезапуск", "action": self._restart_game},
             {"text": "Выход", "action": self._quit_game},
         ]
         self.selected_menu_item = 0
+        
+        # Подменю уровней
+        self.in_level_submenu = False
+        self.selected_level = 0
+        self.level_submenu_items = []
         
         # Подменю противников
         self.in_enemy_submenu = False
@@ -95,6 +113,13 @@ class Game:
         
         self.location_manager.add_location(field_location)
         self.location_manager.set_location("field")
+    
+    def _load_default_level(self):
+        """Загружает уровень по умолчанию"""
+        available = self.level_manager.get_available_levels()
+        if available:
+            self.level_manager.load_level(available[0])
+            print(f"Loaded level: {available[0]}")
     
     def _spawn_enemies(self, count=5, enemy_type='default'):
         """
@@ -183,7 +208,9 @@ class Game:
     
     def _handle_menu_input(self, event):
         """Обработка ввода в меню"""
-        if self.in_enemy_submenu:
+        if self.in_level_submenu:
+            self._handle_level_submenu_input(event)
+        elif self.in_enemy_submenu:
             self._handle_enemy_submenu_input(event)
         else:
             self._handle_main_menu_input(event)
@@ -196,6 +223,19 @@ class Game:
             self.selected_menu_item = (self.selected_menu_item + 1) % len(self.menu_items)
         elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
             self.menu_items[self.selected_menu_item]["action"]()
+    
+    def _handle_level_submenu_input(self, event):
+        """Обработка ввода в подменю уровней"""
+        if event.key == pygame.K_UP or event.key == pygame.K_w:
+            self.selected_level = (self.selected_level - 1) % len(self.level_submenu_items)
+        elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+            self.selected_level = (self.selected_level + 1) % len(self.level_submenu_items)
+        elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+            self.level_submenu_items[self.selected_level]["action"]()
+        elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
+            self._close_level_submenu()
+        elif event.key == pygame.K_ESCAPE:
+            self._close_level_submenu()
     
     def _handle_enemy_submenu_input(self, event):
         """Обработка ввода в подменю противников"""
@@ -214,6 +254,7 @@ class Game:
         """Перезапуск игры"""
         self.player = Player(x=0, y=0, speed=8.0, max_health=100, max_mana=100)
         self.combat_system = CombatSystem()
+        self.enemy_projectiles = []  # Очищаем снаряды врагов
         self._setup_locations()
         self.game_over = False
         self.paused = False
@@ -276,6 +317,48 @@ class Game:
         reload_enemy_types()
         self._build_enemy_submenu()
     
+    def _open_level_submenu(self):
+        """Открывает подменю уровней"""
+        self._build_level_submenu()
+        self.in_level_submenu = True
+        self.selected_level = 0
+    
+    def _close_level_submenu(self):
+        """Закрывает подменю уровней"""
+        self.in_level_submenu = False
+    
+    def _build_level_submenu(self):
+        """Строит подменю уровней"""
+        self.level_submenu_items = []
+        
+        # Доступные уровни
+        for level_name in self.level_manager.get_available_levels():
+            current = self.level_manager.get_current_level()
+            is_current = current and current.name == level_name
+            prefix = "● " if is_current else ""
+            self.level_submenu_items.append({
+                "text": f"{prefix}{level_name}",
+                "action": lambda name=level_name: self._load_level(name)
+            })
+        
+        if not self.level_submenu_items:
+            self.level_submenu_items.append({
+                "text": "(нет уровней)",
+                "action": lambda: None
+            })
+        
+        self.level_submenu_items.append({
+            "text": "← Назад",
+            "action": self._close_level_submenu
+        })
+    
+    def _load_level(self, level_name):
+        """Загружает выбранный уровень"""
+        if self.level_manager.load_level(level_name):
+            print(f"Loaded level: {level_name}")
+            self._close_level_submenu()
+            self._resume_game()
+    
     def _update(self, dt):
         """Обновление игровой логики"""
         current_location = self.location_manager.get_current_location()
@@ -297,6 +380,9 @@ class Game:
         # Обновление камеры после движения
         player_x, player_y = self.player.get_position()
         self.camera.update(player_x, player_y, self.iso_converter)
+        
+        # Обновление тумана войны
+        self.fog_of_war.update(player_x, player_y)
         
         # Обновление локации и получение атак врагов
         if current_location:
@@ -422,16 +508,81 @@ class Game:
             
             # Враг атакует игрока
             if attack_info:
-                damage = attack_info['damage']
-                self.player.take_damage(damage)
+                is_melee = attack_info.get('is_melee', True)
+                
+                if is_melee:
+                    # Ближний бой - мгновенный урон
+                    damage = attack_info['damage']
+                    self.player.take_damage(damage)
+                else:
+                    # Дальний бой - создаём снаряд врага
+                    self._create_enemy_projectile(attack_info)
             
             # Удаляем мёртвых врагов
             if enemy.is_dead:
                 location.enemies.remove(enemy)
         
+        # Обновление снарядов врагов
+        self._update_enemy_projectiles(dt, player_x, player_y)
+        
         # Обновление порталов
         for portal in location.portals:
             portal.update(dt)
+    
+    def _create_enemy_projectile(self, attack_info):
+        """Создаёт снаряд врага"""
+        start_x = attack_info['start_x']
+        start_y = attack_info['start_y']
+        target_x = attack_info['target_x']
+        target_y = attack_info['target_y']
+        damage = attack_info['damage']
+        
+        dx = target_x - start_x
+        dy = target_y - start_y
+        angle = math.atan2(dy, dx)
+        
+        projectile = {
+            'x': start_x,
+            'y': start_y,
+            'angle': angle,
+            'speed': 10.0,  # Скорость снаряда
+            'damage': damage,
+            'range': 15.0,  # Максимальная дальность
+            'distance': 0.0,
+            'active': True,
+            'age': 0.0
+        }
+        
+        self.enemy_projectiles.append(projectile)
+    
+    def _update_enemy_projectiles(self, dt, player_x, player_y):
+        """Обновляет снаряды врагов"""
+        for proj in self.enemy_projectiles[:]:
+            if not proj['active']:
+                self.enemy_projectiles.remove(proj)
+                continue
+            
+            proj['age'] += dt
+            
+            # Движение
+            move_dist = proj['speed'] * dt
+            proj['x'] += math.cos(proj['angle']) * move_dist
+            proj['y'] += math.sin(proj['angle']) * move_dist
+            proj['distance'] += move_dist
+            
+            # Проверка дальности
+            if proj['distance'] >= proj['range']:
+                proj['active'] = False
+                continue
+            
+            # Проверка попадания в игрока
+            dx = proj['x'] - player_x
+            dy = proj['y'] - player_y
+            dist_to_player = math.sqrt(dx * dx + dy * dy)
+            
+            if dist_to_player < 0.8:  # Радиус попадания
+                self.player.take_damage(proj['damage'])
+                proj['active'] = False
     
     def _check_attack_hits(self, location):
         """Проверка попаданий атак по врагам"""
@@ -442,6 +593,29 @@ class Game:
         for attack, enemy in hits:
             if not attack.is_melee:
                 enemy.take_damage(attack.damage)
+    
+    def _draw_enemy_projectiles(self, camera_offset):
+        """Отрисовка снарядов врагов"""
+        for proj in self.enemy_projectiles:
+            if not proj['active']:
+                continue
+            
+            screen_x, screen_y = self.iso_converter.world_to_screen(proj['x'], proj['y'])
+            screen_x += camera_offset[0]
+            screen_y += camera_offset[1]
+            
+            # Тёмный магический снаряд (фиолетовый/тёмный)
+            pulse = math.sin(proj['age'] * 15) * 2
+            size = int(6 + pulse)
+            
+            # Внешнее свечение
+            pygame.draw.circle(self.screen, (80, 0, 120), (int(screen_x), int(screen_y)), size + 3)
+            # Среднее
+            pygame.draw.circle(self.screen, (140, 0, 200), (int(screen_x), int(screen_y)), size + 1)
+            # Ядро
+            pygame.draw.circle(self.screen, (200, 100, 255), (int(screen_x), int(screen_y)), size - 1)
+            # Центр
+            pygame.draw.circle(self.screen, (255, 200, 255), (int(screen_x), int(screen_y)), max(1, size - 3))
     
     def _draw(self):
         """Отрисовка игры"""
@@ -457,15 +631,21 @@ class Game:
         # Сетка
         self._draw_grid(current_location, camera_offset)
         
-        # Локация (враги)
+        # Уровень (тайловая карта)
+        self._draw_level(camera_offset)
+        
+        # Локация (враги) - только видимые
         if current_location:
-            current_location.draw(self.screen, self.iso_converter, camera_offset)
+            self._draw_visible_enemies(current_location, camera_offset)
         
         # Персонаж
         self.player.draw(self.screen, self.iso_converter, camera_offset)
         
         # Атаки
         self.combat_system.draw(self.screen, self.iso_converter, camera_offset)
+        
+        # Снаряды врагов
+        self._draw_enemy_projectiles(camera_offset)
         
         # UI
         self._draw_ui(current_location)
@@ -488,6 +668,27 @@ class Game:
                 if 0 <= screen_x <= SCREEN_WIDTH and 0 <= screen_y <= SCREEN_HEIGHT:
                     pygame.draw.circle(self.screen, grid_color, (screen_x, screen_y), 2)
     
+    def _draw_visible_enemies(self, location, camera_offset):
+        """Отрисовка только видимых врагов (в зоне видимости игрока)"""
+        if not location or not location.enemies:
+            return
+        
+        for enemy in location.enemies:
+            if enemy.is_dead:
+                continue
+            
+            ex, ey = enemy.get_position()
+            
+            # Проверяем, виден ли враг
+            if self.fog_of_war.is_position_visible(ex, ey):
+                enemy.draw(self.screen, self.iso_converter, camera_offset)
+    
+    def _draw_level(self, camera_offset):
+        """Отрисовка тайловой карты уровня"""
+        level = self.level_manager.get_current_level()
+        if level:
+            level.draw(self.screen, camera_offset, self.iso_converter, self.fog_of_war)
+    
     def _draw_ui(self, location):
         """Отрисовка UI"""
         player_x, player_y = self.player.get_position()
@@ -502,40 +703,118 @@ class Game:
         self._draw_info(location, player_x, player_y)
     
     def _draw_minimap(self, location, player_x, player_y):
-        """Отрисовка миникарты"""
+        """Отрисовка миникарты с туманом войны"""
         minimap_x = SCREEN_WIDTH - self.minimap_size - 10
         minimap_y = 10
         
-        # Фон миникарты (используем кэшированную поверхность)
-        self.screen.blit(self.minimap_surface, (minimap_x, minimap_y))
+        # Создаём временную поверхность для миникарты
+        minimap_temp = pygame.Surface((self.minimap_size, self.minimap_size), pygame.SRCALPHA)
+        minimap_temp.fill((0, 0, 0, 220))
         
         # Центр миникарты
-        minimap_center_x = minimap_x + self.minimap_size // 2
-        minimap_center_y = minimap_y + self.minimap_size // 2
+        minimap_center_x = self.minimap_size // 2
+        minimap_center_y = self.minimap_size // 2
         
-        # Игрок (синяя точка)
-        pygame.draw.circle(self.screen, (100, 150, 255), (minimap_center_x, minimap_center_y), 4)
+        # Масштаб: 1 тайл = несколько пикселей на миникарте
+        tile_size = 5
         
-        # Враги (красные точки)
+        # Получаем исследованные и видимые тайлы
+        explored_tiles = self.fog_of_war.get_explored_for_minimap()
+        visible_tiles = self.fog_of_war.get_visible_for_minimap()
+        
+        # Отрисовка тайлов уровня (только исследованные)
+        level = self.level_manager.get_current_level()
+        if level and level.tiles:
+            for (tx, ty), tile_data in level.tiles.items():
+                # Показываем только исследованные тайлы
+                if (tx, ty) not in explored_tiles:
+                    continue
+                
+                # Позиция тайла относительно игрока
+                dx = tx - player_x
+                dy = ty - player_y
+                
+                # Проверяем расстояние для миникарты
+                distance = math.sqrt(dx * dx + dy * dy)
+                if distance > self.minimap_radius:
+                    continue
+                
+                # Изометрическое преобразование для миникарты
+                iso_x = (dx - dy) * tile_size // 2
+                iso_y = (dx + dy) * tile_size // 4
+                
+                tile_minimap_x = minimap_center_x + iso_x
+                tile_minimap_y = minimap_center_y + iso_y
+                
+                # Получаем цвет тайла
+                tileset_name = tile_data.get('tileset', '')
+                if 'grass' in tileset_name.lower():
+                    base_color = (60, 120, 60)
+                elif 'dirt' in tileset_name.lower():
+                    base_color = (120, 80, 50)
+                elif 'sand' in tileset_name.lower():
+                    base_color = (180, 160, 100)
+                elif 'stone' in tileset_name.lower():
+                    base_color = (100, 100, 110)
+                elif 'forest' in tileset_name.lower():
+                    base_color = (40, 80, 40)
+                else:
+                    base_color = (80, 80, 80)
+                
+                # Яркость зависит от видимости
+                if (tx, ty) in visible_tiles:
+                    # Видимый сейчас - яркий
+                    tile_color = (*base_color, 255)
+                else:
+                    # Исследованный но не видимый - тусклый
+                    dim_color = tuple(int(c * 0.5) for c in base_color)
+                    tile_color = (*dim_color, 180)
+                
+                # Рисуем ромб тайла
+                if 0 <= tile_minimap_x < self.minimap_size and 0 <= tile_minimap_y < self.minimap_size:
+                    points = [
+                        (tile_minimap_x, tile_minimap_y - tile_size // 4),
+                        (tile_minimap_x + tile_size // 2, tile_minimap_y),
+                        (tile_minimap_x, tile_minimap_y + tile_size // 4),
+                        (tile_minimap_x - tile_size // 2, tile_minimap_y)
+                    ]
+                    pygame.draw.polygon(minimap_temp, tile_color, points)
+        
+        # Игрок (яркая синяя точка в центре)
+        pygame.draw.circle(minimap_temp, (100, 180, 255), (minimap_center_x, minimap_center_y), 4)
+        pygame.draw.circle(minimap_temp, WHITE, (minimap_center_x, minimap_center_y), 4, 1)
+        
+        # Враги (только видимые!)
         if location and location.enemies:
-            scale = self.minimap_size / (2 * self.minimap_radius)
             for enemy in location.enemies:
                 if enemy.is_dead:
                     continue
                 
                 ex, ey = enemy.get_position()
+                
+                # Показываем врага только если он в зоне видимости
+                if not self.fog_of_war.is_position_visible(ex, ey):
+                    continue
+                
                 dx = ex - player_x
                 dy = ey - player_y
                 distance = math.sqrt(dx * dx + dy * dy)
                 
                 if distance <= self.minimap_radius:
-                    enemy_minimap_x = minimap_center_x + dx * scale
-                    enemy_minimap_y = minimap_center_y + dy * scale
+                    iso_x = (dx - dy) * tile_size // 2
+                    iso_y = (dx + dy) * tile_size // 4
                     
-                    if (minimap_x <= enemy_minimap_x <= minimap_x + self.minimap_size and
-                        minimap_y <= enemy_minimap_y <= minimap_y + self.minimap_size):
-                        pygame.draw.circle(self.screen, RED, 
-                                         (int(enemy_minimap_x), int(enemy_minimap_y)), 3)
+                    enemy_minimap_x = minimap_center_x + iso_x
+                    enemy_minimap_y = minimap_center_y + iso_y
+                    
+                    if 0 <= enemy_minimap_x < self.minimap_size and 0 <= enemy_minimap_y < self.minimap_size:
+                        pygame.draw.circle(minimap_temp, RED, (int(enemy_minimap_x), int(enemy_minimap_y)), 3)
+        
+        # Рамка миникарты
+        pygame.draw.rect(minimap_temp, WHITE, (0, 0, self.minimap_size, self.minimap_size), 2)
+        
+        # Отрисовываем миникарту на экран
+        self.screen.blit(minimap_temp, (minimap_x, minimap_y))
     
     def _draw_info(self, location, player_x, player_y):
         """Отрисовка информации"""
@@ -593,7 +872,9 @@ class Game:
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
         
-        if self.in_enemy_submenu:
+        if self.in_level_submenu:
+            self._draw_level_submenu()
+        elif self.in_enemy_submenu:
             self._draw_enemy_submenu()
         else:
             self._draw_main_menu()
@@ -626,6 +907,40 @@ class Game:
         hint = self.font_small.render("W/S или ↑/↓ - выбор, Enter - подтверждение, ESC - закрыть", True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
         self.screen.blit(hint, hint_rect)
+    
+    def _draw_level_submenu(self):
+        """Отрисовка подменю уровней"""
+        # Заголовок
+        title = self.font_large.render("УРОВНИ", True, WHITE)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+        self.screen.blit(title, title_rect)
+        
+        # Подсказка
+        subtitle = self.font_small.render("Выберите уровень для загрузки", True, GRAY)
+        subtitle_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 135))
+        self.screen.blit(subtitle, subtitle_rect)
+        
+        # Пункты подменю
+        menu_y = 180
+        for i, item in enumerate(self.level_submenu_items):
+            if i == self.selected_level:
+                color = (255, 255, 100)
+                prefix = "> "
+                suffix = " <"
+            else:
+                color = GRAY
+                prefix = "  "
+                suffix = "  "
+            
+            text = self.font_medium.render(f"{prefix}{item['text']}{suffix}", True, color)
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, menu_y))
+            self.screen.blit(text, text_rect)
+            menu_y += 30
+        
+        # Подсказка навигации
+        nav_hint = self.font_small.render("← Назад | ↑↓ Выбор | Enter Загрузить", True, GRAY)
+        nav_rect = nav_hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        self.screen.blit(nav_hint, nav_rect)
     
     def _draw_enemy_submenu(self):
         """Отрисовка подменю противников"""

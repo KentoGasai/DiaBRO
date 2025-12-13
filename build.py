@@ -52,6 +52,9 @@ def build(version):
     # Путь к конфигу врагов
     enemy_types_path = os.path.join("game", "enemy_types.json")
     
+    # Путь к папке с уровнями
+    levels_path = os.path.join("game", "levels")
+    
     # Команда PyInstaller
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -68,6 +71,11 @@ def build(version):
         "--noconfirm",         # Без подтверждений
         main_script
     ]
+    
+    # Добавляем уровни если папка существует и не пуста
+    if os.path.exists(levels_path) and os.listdir(levels_path):
+        cmd.insert(-1, "--add-data")
+        cmd.insert(-1, f"{levels_path};game/levels")
     
     print("Выполняю команду:")
     print(" ".join(cmd))

@@ -5,22 +5,30 @@
 // State
 let enemyTypes = {};
 let availableSprites = [];
+let availableWeapons = [];
+let availableTextures = [];
 let currentEnemyId = null;
 let currentSpriteImage = null;
+let currentWeaponImage = null;
 let playerSpriteImage = null;
 let animationFrame = 0;
 let animationDirection = 0;
 let animationInterval = null;
 let currentPreviewScale = 1.0;
+let currentWeaponOffsetX = 0;
+let currentWeaponOffsetY = 0;
+
+// Состояние превью
+let previewSidebarVisible = false;
+let enemyListAnimations = {}; // Анимации для списка врагов
+let editorPreviewAnimation = null; // Анимация в форме редактирования
 
 // DOM Elements
 const enemyList = document.getElementById('enemy-list');
 const spriteList = document.getElementById('sprite-list');
 const editorPanel = document.getElementById('editor-panel');
 const welcomePanel = document.getElementById('welcome-panel');
-const previewPanel = document.getElementById('preview-panel');
-const animationPreview = document.getElementById('animation-preview');
-const spritePreview = document.getElementById('sprite-preview');
+const previewSidebar = document.getElementById('preview-sidebar');
 const enemyForm = document.getElementById('enemy-form');
 const uploadZone = document.getElementById('upload-zone');
 const spriteUpload = document.getElementById('sprite-upload');
@@ -38,14 +46,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadData() {
     try {
+        // Загружаем данные врагов
         const response = await fetch('/api/enemy-types');
         const data = await response.json();
         
         enemyTypes = data.enemy_types || {};
         availableSprites = data.available_sprites || [];
+        availableWeapons = data.available_weapons || [];
+        
+        // Загружаем текстуры
+        try {
+            const texturesResponse = await fetch('/api/textures');
+            const texturesData = await texturesResponse.json();
+            availableTextures = texturesData.textures || [];
+        } catch (e) {
+            availableTextures = [];
+        }
         
         renderEnemyList();
         renderSpriteList();
+        renderTextureList();
         updateSpriteSelects();
     } catch (error) {
         showToast('Ошибка загрузки данных', 'error');
@@ -58,6 +78,12 @@ async function loadData() {
 // ========================================
 
 function renderEnemyList() {
+    // Останавливаем все анимации
+    Object.values(enemyListAnimations).forEach(anim => {
+        if (anim.interval) clearInterval(anim.interval);
+    });
+    enemyListAnimations = {};
+    
     enemyList.innerHTML = '';
     
     Object.entries(enemyTypes).forEach(([id, enemy]) => {
@@ -66,19 +92,79 @@ function renderEnemyList() {
         item.onclick = () => selectEnemy(id);
         
         const color = enemy.color || [200, 50, 50];
+        const canvasId = `enemy-preview-${id}`;
         
         item.innerHTML = `
-            <div class="enemy-item-icon" style="background: rgb(${color.join(',')})">
-                ${enemy.sprite_path ? '🎨' : '👾'}
+            <div class="enemy-item-preview">
+                <canvas id="${canvasId}" width="64" height="64"></canvas>
             </div>
-            <div class="enemy-item-info">
+            <div class="enemy-item-text">
                 <div class="enemy-item-name">${enemy.name || id}</div>
                 <div class="enemy-item-id">${id}</div>
             </div>
         `;
         
         enemyList.appendChild(item);
+        
+        // Запускаем анимацию если есть спрайт
+        if (enemy.sprite_path) {
+            startEnemyListAnimation(id, enemy.sprite_path, canvasId, color);
+        } else {
+            // Рисуем цветной квадрат
+            const canvas = document.getElementById(canvasId);
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = `rgb(${color.join(',')})`;
+                ctx.fillRect(12, 12, 40, 40);
+            }
+        }
     });
+}
+
+function startEnemyListAnimation(id, spritePath, canvasId, color) {
+    const img = new Image();
+    img.onload = () => {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const frameSize = 256;
+        let frame = 0;
+        let direction = 0;
+        const directions = [0, 1, 2, 3, 4, 5, 6, 7]; // Все 8 направлений
+        
+        function draw() {
+            ctx.clearRect(0, 0, 64, 64);
+            const sx = (frame % 4) * frameSize;
+            const sy = direction * frameSize;
+            ctx.drawImage(img, sx, sy, frameSize, frameSize, 0, 0, 64, 64);
+        }
+        
+        draw();
+        
+        const interval = setInterval(() => {
+            frame = (frame + 1) % 4;
+            if (frame === 0) {
+                // Переключаем направление по кругу
+                direction = (direction + 1) % 8;
+            }
+            draw();
+        }, 200);
+        
+        enemyListAnimations[id] = { interval, img };
+    };
+    img.onerror = () => {
+        // Рисуем цветной квадрат при ошибке
+        const canvas = document.getElementById(canvasId);
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = `rgb(${color.join(',')})`;
+            ctx.fillRect(12, 12, 40, 40);
+        }
+    };
+    
+    const filename = spritePath.split('/').pop();
+    img.src = `/api/sprites/${filename}`;
 }
 
 function renderSpriteList() {
@@ -101,16 +187,72 @@ function renderSpriteList() {
     });
 }
 
+function renderTextureList() {
+    const textureList = document.getElementById('texture-list');
+    if (!textureList) return;
+    
+    textureList.innerHTML = '';
+    
+    availableTextures.forEach(filename => {
+        const item = document.createElement('div');
+        item.className = 'sprite-item';
+        
+        item.innerHTML = `
+            <div class="sprite-item-preview texture-preview">
+                <img src="/api/textures/${filename}" alt="${filename}">
+            </div>
+            <span class="sprite-item-name">${filename.replace('.png', '')}</span>
+            <span class="sprite-item-delete" onclick="deleteTexture('${filename}', event)">🗑️</span>
+        `;
+        
+        textureList.appendChild(item);
+    });
+}
+
+async function deleteTexture(filename, event) {
+    event.stopPropagation();
+    
+    if (!confirm(`Удалить текстуру ${filename}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/textures/${filename}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showToast('Текстура удалена', 'success');
+            await loadData();
+        } else {
+            showToast('Ошибка удаления', 'error');
+        }
+    } catch (error) {
+        showToast('Ошибка удаления', 'error');
+        console.error(error);
+    }
+}
+
 function updateSpriteSelects() {
     const spritePath = document.getElementById('sprite-path');
     const weaponPath = document.getElementById('weapon-path');
     const projectilePath = document.getElementById('projectile-path');
     
-    const options = '<option value="">-- Без спрайта --</option>' +
+    // Спрайты персонажей врагов
+    const enemyOptions = '<option value="">-- Без спрайта --</option>' +
         availableSprites.map(s => `<option value="game/images/enemy/${s}">${s}</option>`).join('');
     
-    spritePath.innerHTML = options;
-    weaponPath.innerHTML = options.replace('спрайта', 'оружия');
+    // Спрайты оружия (из папки weapon + enemy)
+    const weaponOptions = '<option value="">-- Без оружия --</option>' +
+        '<optgroup label="📁 Оружие (weapon/)">' +
+        availableWeapons.map(s => `<option value="game/images/weapon/${s}">🗡️ ${s}</option>`).join('') +
+        '</optgroup>' +
+        '<optgroup label="📁 Враги (enemy/)">' +
+        availableSprites.map(s => `<option value="game/images/enemy/${s}">${s}</option>`).join('') +
+        '</optgroup>';
+    
+    spritePath.innerHTML = enemyOptions;
+    weaponPath.innerHTML = weaponOptions;
     projectilePath.innerHTML = '<option value="">-- Стандартный (как у игрока) --</option>' +
         availableSprites.map(s => `<option value="game/images/enemy/${s}">${s}</option>`).join('');
 }
@@ -142,7 +284,16 @@ function createNewEnemy() {
     // Тип атаки
     document.querySelector('input[name="attack-type"][value="melee"]').checked = true;
     document.getElementById('projectile-path').value = '';
+    
+    // Смещение оружия
+    document.getElementById('weapon-offset-x').value = '0';
+    document.getElementById('weapon-offset-y').value = '0';
+    currentWeaponOffsetX = 0;
+    currentWeaponOffsetY = 0;
+    currentWeaponImage = null;
+    
     updateAttackTypeUI();
+    updateWeaponOffsetUI();
     
     updateColorPreview();
     updatePreviewScale(1.0);
@@ -150,6 +301,7 @@ function createNewEnemy() {
     document.getElementById('editor-title').textContent = 'Новый тип врага';
     
     showEditor();
+    startEditorPreview();
 }
 
 function selectEnemy(id) {
@@ -176,6 +328,14 @@ function selectEnemy(id) {
     const attackType = enemy.attack_type || 'melee';
     document.querySelector(`input[name="attack-type"][value="${attackType}"]`).checked = true;
     document.getElementById('projectile-path').value = enemy.projectile_path || '';
+    
+    // Смещение оружия
+    const weaponOffset = enemy.weapon_offset || [0, 0];
+    document.getElementById('weapon-offset-x').value = weaponOffset[0] || 0;
+    document.getElementById('weapon-offset-y').value = weaponOffset[1] || 0;
+    currentWeaponOffsetX = weaponOffset[0] || 0;
+    currentWeaponOffsetY = weaponOffset[1] || 0;
+    
     updateAttackTypeUI();
     
     const color = enemy.color || [200, 50, 50];
@@ -191,16 +351,32 @@ function selectEnemy(id) {
     
     document.getElementById('editor-title').textContent = `Редактирование: ${enemy.name || id}`;
     
-    // Preview sprite if available
+    // Предзагружаем спрайты для превью
     if (enemy.sprite_path) {
         const filename = enemy.sprite_path.split('/').pop();
         previewSprite(filename);
-    } else {
-        closePreview();
+    }
+    
+    if (enemy.weapon_path) {
+        loadWeaponSprite(enemy.weapon_path);
+    }
+    
+    updateWeaponOffsetUI();
+    
+    // Закрываем превью при смене врага
+    if (previewSidebarVisible) {
+        previewSidebarVisible = false;
+        previewSidebar.classList.add('hidden');
+        stopAnimation();
     }
     
     showEditor();
     renderEnemyList();
+    
+    // Запускаем анимацию в форме (с задержкой для загрузки спрайтов)
+    setTimeout(() => {
+        startEditorPreview();
+    }, 150);
 }
 
 function updateAttackTypeUI() {
@@ -223,6 +399,52 @@ function updateAttackTypeUI() {
     }
 }
 
+function updateWeaponOffsetUI() {
+    const weaponPath = document.getElementById('weapon-path').value;
+    const weaponOffsetRow = document.getElementById('weapon-offset-row');
+    const weaponSection = document.getElementById('weapon-section');
+    
+    if (weaponPath) {
+        if (weaponOffsetRow) weaponOffsetRow.style.display = 'flex';
+        if (weaponSection) weaponSection.style.display = 'block';
+        loadWeaponSprite(weaponPath);
+    } else {
+        if (weaponOffsetRow) weaponOffsetRow.style.display = 'none';
+        if (weaponSection) weaponSection.style.display = 'none';
+        currentWeaponImage = null;
+    }
+}
+
+function loadWeaponSprite(weaponPath) {
+    if (!weaponPath) {
+        currentWeaponImage = null;
+        return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+        currentWeaponImage = img;
+        console.log('Weapon loaded:', weaponPath);
+    };
+    img.onerror = () => {
+        currentWeaponImage = null;
+        console.error('Failed to load weapon:', weaponPath);
+    };
+    
+    // Определяем URL для загрузки
+    const filename = weaponPath.split('/').pop();
+    if (weaponPath.includes('weapon')) {
+        img.src = `/api/weapons/${filename}`;
+    } else {
+        img.src = `/api/sprites/${filename}`;
+    }
+}
+
+function updateWeaponOffset() {
+    currentWeaponOffsetX = parseInt(document.getElementById('weapon-offset-x').value) || 0;
+    currentWeaponOffsetY = parseInt(document.getElementById('weapon-offset-y').value) || 0;
+}
+
 async function saveEnemy(event) {
     event.preventDefault();
     
@@ -241,6 +463,10 @@ async function saveEnemy(event) {
         name: document.getElementById('enemy-name').value || id,
         sprite_path: document.getElementById('sprite-path').value,
         weapon_path: document.getElementById('weapon-path').value,
+        weapon_offset: [
+            parseInt(document.getElementById('weapon-offset-x').value) || 0,
+            parseInt(document.getElementById('weapon-offset-y').value) || 0
+        ],
         projectile_path: document.getElementById('projectile-path').value,
         sprite_scale: parseFloat(document.getElementById('sprite-scale').value),
         max_health: parseInt(document.getElementById('max-health').value),
@@ -358,7 +584,10 @@ async function deleteSprite(filename, event) {
         
         if (response.ok) {
             showToast('Спрайт удалён', 'success');
-            closePreview();
+            currentSpriteImage = null;
+            if (previewSidebarVisible) {
+                togglePreviewPanel();
+            }
             await loadData();
         } else {
             showToast('Ошибка удаления', 'error');
@@ -369,112 +598,167 @@ async function deleteSprite(filename, event) {
     }
 }
 
+// ========================================
+// Preview Sidebar
+// ========================================
+
+function togglePreviewPanel() {
+    previewSidebarVisible = !previewSidebarVisible;
+    
+    if (previewSidebarVisible) {
+        previewSidebar.classList.remove('hidden');
+        loadPlayerSprite();
+        loadCurrentSprites();
+        startAnimation();
+    } else {
+        previewSidebar.classList.add('hidden');
+        stopAnimation();
+    }
+}
+
+function loadCurrentSprites() {
+    const spritePath = document.getElementById('sprite-path').value;
+    const weaponPath = document.getElementById('weapon-path').value;
+    
+    // Загружаем спрайт персонажа
+    if (spritePath) {
+        const filename = spritePath.split('/').pop();
+        const img = new Image();
+        img.onload = () => {
+            currentSpriteImage = img;
+        };
+        img.src = `/api/sprites/${filename}`;
+    }
+    
+    // Загружаем оружие
+    if (weaponPath) {
+        loadWeaponSprite(weaponPath);
+        document.getElementById('weapon-section').style.display = 'block';
+    } else {
+        document.getElementById('weapon-section').style.display = 'none';
+        currentWeaponImage = null;
+    }
+    
+    // Обновляем отображение смещения
+    currentWeaponOffsetX = parseInt(document.getElementById('weapon-offset-x').value) || 0;
+    currentWeaponOffsetY = parseInt(document.getElementById('weapon-offset-y').value) || 0;
+    updateOffsetDisplay();
+    
+    // Масштаб
+    const scale = parseFloat(document.getElementById('sprite-scale').value) || 1.0;
+    currentPreviewScale = scale;
+    updatePreviewScale(scale);
+}
+
 function previewSprite(filename) {
-    stopAnimation();
-    
-    // Загружаем спрайт игрока для сравнения
-    loadPlayerSprite();
-    
     const img = new Image();
     img.onload = () => {
         currentSpriteImage = img;
-        animationFrame = 0;
-        animationDirection = 0;
-        
-        // Получаем масштаб из формы
-        const formScale = parseFloat(document.getElementById('sprite-scale').value) || 1.0;
-        currentPreviewScale = formScale;
-        updatePreviewScale(formScale);
-        
-        spritePreview.innerHTML = '';
-        animationPreview.classList.remove('hidden');
-        document.getElementById('close-preview-btn').classList.remove('hidden');
-        
-        startAnimation();
-        updateDirectionLabel();
-    };
-    img.onerror = () => {
-        showToast('Ошибка загрузки спрайта', 'error');
     };
     img.src = `/api/sprites/${filename}`;
 }
 
 function loadPlayerSprite() {
-    if (playerSpriteImage) return; // Уже загружен
+    if (playerSpriteImage) return;
     
     const img = new Image();
     img.onload = () => {
         playerSpriteImage = img;
     };
-    // Пытаемся загрузить спрайт игрока
     img.src = '/api/player-sprite';
-}
-
-function closePreview() {
-    stopAnimation();
-    animationPreview.classList.add('hidden');
-    document.getElementById('close-preview-btn').classList.add('hidden');
-    spritePreview.innerHTML = '<p class="placeholder">Выберите спрайт для предпросмотра</p>';
 }
 
 function updatePreviewScale(scale) {
     currentPreviewScale = scale;
-    document.getElementById('preview-scale').value = scale;
-    document.getElementById('preview-scale-value').textContent = scale.toFixed(1) + 'x';
-    document.getElementById('enemy-scale-label').textContent = `Противник (${scale.toFixed(1)}x)`;
+    const scaleSlider = document.getElementById('preview-scale');
+    const scaleValue = document.getElementById('preview-scale-value');
+    const scaleLabel = document.getElementById('enemy-scale-label');
+    
+    if (scaleSlider) scaleSlider.value = scale;
+    if (scaleValue) scaleValue.textContent = scale.toFixed(1) + 'x';
+    if (scaleLabel) scaleLabel.textContent = `Противник (${scale.toFixed(1)}x)`;
 }
 
 function applyScaleToForm() {
     document.getElementById('sprite-scale').value = currentPreviewScale.toFixed(1);
-    showToast(`Масштаб ${currentPreviewScale.toFixed(1)}x применён к форме`, 'success');
+    showToast(`Масштаб ${currentPreviewScale.toFixed(1)}x применён`, 'success');
+}
+
+function updateOffsetDisplay() {
+    const offsetX = document.getElementById('offset-x-display');
+    const offsetY = document.getElementById('offset-y-display');
+    if (offsetX) offsetX.textContent = currentWeaponOffsetX;
+    if (offsetY) offsetY.textContent = currentWeaponOffsetY;
+}
+
+function adjustWeaponOffset(dx, dy) {
+    currentWeaponOffsetX += dx;
+    currentWeaponOffsetY += dy;
+    updateOffsetDisplay();
+}
+
+function applyWeaponOffsetToForm() {
+    document.getElementById('weapon-offset-x').value = currentWeaponOffsetX;
+    document.getElementById('weapon-offset-y').value = currentWeaponOffsetY;
+    showToast(`Смещение (${currentWeaponOffsetX}, ${currentWeaponOffsetY}) применено`, 'success');
 }
 
 function startAnimation() {
-    const enemyCanvas = document.getElementById('animation-canvas');
+    stopAnimation();
+    
+    const enemyCanvas = document.getElementById('enemy-canvas');
     const playerCanvas = document.getElementById('player-canvas');
+    const weaponCanvas = document.getElementById('weapon-preview-canvas');
+    
+    if (!enemyCanvas || !playerCanvas) return;
+    
     const enemyCtx = enemyCanvas.getContext('2d');
     const playerCtx = playerCanvas.getContext('2d');
+    const weaponCtx = weaponCanvas ? weaponCanvas.getContext('2d') : null;
     
     const frameSize = 256;
-    const baseCanvasSize = 256;
     
     function draw() {
         // Очистка
-        enemyCtx.clearRect(0, 0, enemyCanvas.width, enemyCanvas.height);
-        playerCtx.clearRect(0, 0, playerCanvas.width, playerCanvas.height);
+        enemyCtx.clearRect(0, 0, 128, 128);
+        playerCtx.clearRect(0, 0, 128, 128);
+        if (weaponCtx) weaponCtx.clearRect(0, 0, 160, 160);
         
         const sx = (animationFrame % 4) * frameSize;
         const sy = animationDirection * frameSize;
         
-        // Отрисовка игрока (всегда 1.0x - полный размер канваса)
+        // Игрок (всегда масштаб 1.0)
         if (playerSpriteImage) {
-            playerCtx.drawImage(
-                playerSpriteImage,
-                sx, sy, frameSize, frameSize,
-                0, 0, baseCanvasSize, baseCanvasSize
-            );
+            playerCtx.drawImage(playerSpriteImage, sx, sy, frameSize, frameSize, 0, 0, 128, 128);
         } else {
-            // Плейсхолдер игрока
             playerCtx.fillStyle = '#3366aa';
-            playerCtx.fillRect(28, 28, 200, 200);
-            playerCtx.fillStyle = '#5588cc';
-            playerCtx.fillRect(78, 78, 100, 100);
-            playerCtx.fillStyle = '#ffffff';
-            playerCtx.font = '16px sans-serif';
+            playerCtx.fillRect(14, 14, 100, 100);
+            playerCtx.fillStyle = '#fff';
+            playerCtx.font = '12px sans-serif';
             playerCtx.textAlign = 'center';
-            playerCtx.fillText('Игрок', 128, 135);
+            playerCtx.fillText('Игрок', 64, 68);
         }
         
-        // Отрисовка противника с масштабом
+        // Противник с масштабом
         if (currentSpriteImage) {
-            const scaledSize = baseCanvasSize * currentPreviewScale;
-            const offset = (baseCanvasSize - scaledSize) / 2;
+            const scaledSize = 128 * currentPreviewScale;
+            const offset = (128 - scaledSize) / 2;
+            enemyCtx.drawImage(currentSpriteImage, sx, sy, frameSize, frameSize, offset, offset, scaledSize, scaledSize);
+        }
+        
+        // Превью оружия (большое для настройки)
+        if (weaponCtx && currentSpriteImage) {
+            // Рисуем персонажа
+            weaponCtx.drawImage(currentSpriteImage, sx, sy, frameSize, frameSize, 0, 0, 160, 160);
             
-            enemyCtx.drawImage(
-                currentSpriteImage,
-                sx, sy, frameSize, frameSize,
-                offset, offset, scaledSize, scaledSize
-            );
+            // Накладываем оружие с тем же кадром анимации
+            if (currentWeaponImage) {
+                // Смещение масштабируется пропорционально (160/256)
+                const scale = 160 / frameSize;
+                const weaponOffsetX = currentWeaponOffsetX * scale;
+                const weaponOffsetY = currentWeaponOffsetY * scale;
+                weaponCtx.drawImage(currentWeaponImage, sx, sy, frameSize, frameSize, weaponOffsetX, weaponOffsetY, 160, 160);
+            }
         }
     }
     
@@ -491,7 +775,6 @@ function stopAnimation() {
         clearInterval(animationInterval);
         animationInterval = null;
     }
-    currentSpriteImage = null;
 }
 
 function prevDirection() {
@@ -505,10 +788,73 @@ function nextDirection() {
 }
 
 function updateDirectionLabel() {
-    const directions = ['Влево', 'Влево-вверх', 'Вверх', 'Вправо-вверх', 
-                        'Вправо', 'Вправо-вниз', 'Вниз', 'Влево-вниз'];
-    document.getElementById('direction-label').textContent = 
-        `Направление: ${directions[animationDirection]}`;
+    const directions = ['←', '↖', '↑', '↗', '→', '↘', '↓', '↙'];
+    const dirLabel = document.getElementById('direction-label');
+    if (dirLabel) {
+        dirLabel.textContent = directions[animationDirection];
+    }
+}
+
+// ========================================
+// Editor Preview Animation (в форме)
+// ========================================
+
+function startEditorPreview() {
+    stopEditorPreview();
+    
+    const canvas = document.getElementById('editor-preview-canvas');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const canvasSize = 500;
+    const frameSize = 256;
+    let frame = 0;
+    let direction = 0;
+    
+    function draw() {
+        ctx.clearRect(0, 0, canvasSize, canvasSize);
+        
+        if (currentSpriteImage) {
+            const sx = (frame % 4) * frameSize;
+            const sy = direction * frameSize;
+            
+            // Рисуем персонажа
+            ctx.drawImage(currentSpriteImage, sx, sy, frameSize, frameSize, 0, 0, canvasSize, canvasSize);
+            
+            // Накладываем оружие
+            if (currentWeaponImage) {
+                const scale = canvasSize / frameSize;
+                const offsetX = currentWeaponOffsetX * scale;
+                const offsetY = currentWeaponOffsetY * scale;
+                ctx.drawImage(currentWeaponImage, sx, sy, frameSize, frameSize, offsetX, offsetY, canvasSize, canvasSize);
+            }
+        } else {
+            // Плейсхолдер
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, 0, canvasSize, canvasSize);
+            ctx.fillStyle = '#666';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Нет спрайта', canvasSize / 2, canvasSize / 2 + 5);
+        }
+    }
+    
+    draw();
+    
+    editorPreviewAnimation = setInterval(() => {
+        frame = (frame + 1) % 4;
+        if (frame === 0) {
+            direction = (direction + 1) % 8;
+        }
+        draw();
+    }, 200);
+}
+
+function stopEditorPreview() {
+    if (editorPreviewAnimation) {
+        clearInterval(editorPreviewAnimation);
+        editorPreviewAnimation = null;
+    }
 }
 
 // ========================================
@@ -620,14 +966,24 @@ function setupEventListeners() {
         }
     });
     
-    // Sprite select change - preview
+    // Sprite select change - preload
     document.getElementById('sprite-path').addEventListener('change', (e) => {
         const value = e.target.value;
         if (value) {
             const filename = value.split('/').pop();
             previewSprite(filename);
+            
+            // Если выбрано оружие — загружаем и его
+            const weaponPath = document.getElementById('weapon-path').value;
+            if (weaponPath) {
+                loadWeaponSprite(weaponPath);
+            }
+            
+            // Обновляем превью в форме
+            setTimeout(() => startEditorPreview(), 150);
         } else {
-            closePreview();
+            currentSpriteImage = null;
+            startEditorPreview(); // Покажет плейсхолдер
         }
     });
     
@@ -652,6 +1008,17 @@ function setupEventListeners() {
         radio.addEventListener('change', updateAttackTypeUI);
     });
     
+    // Weapon path change - show/hide offset controls and load weapon
+    document.getElementById('weapon-path').addEventListener('change', () => {
+        updateWeaponOffsetUI();
+        // Обновляем превью в форме
+        setTimeout(() => startEditorPreview(), 150);
+    });
+    
+    // Weapon offset - real-time preview
+    document.getElementById('weapon-offset-x').addEventListener('input', updateWeaponOffset);
+    document.getElementById('weapon-offset-y').addEventListener('input', updateWeaponOffset);
+    
     // Close modal on outside click
     document.getElementById('export-modal').addEventListener('click', (e) => {
         if (e.target.classList.contains('modal')) {
@@ -665,5 +1032,66 @@ function setupEventListeners() {
             closeExportModal();
         }
     });
+    
+    // Texture upload
+    const textureUploadZone = document.getElementById('texture-upload-zone');
+    const textureUpload = document.getElementById('texture-upload');
+    
+    if (textureUploadZone && textureUpload) {
+        textureUploadZone.addEventListener('click', () => textureUpload.click());
+        
+        textureUploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            textureUploadZone.classList.add('dragover');
+        });
+        
+        textureUploadZone.addEventListener('dragleave', () => {
+            textureUploadZone.classList.remove('dragover');
+        });
+        
+        textureUploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            textureUploadZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadTexture(files[0]);
+            }
+        });
+        
+        textureUpload.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                uploadTexture(e.target.files[0]);
+            }
+        });
+    }
+}
+
+async function uploadTexture(file) {
+    if (!file.name.endsWith('.png')) {
+        showToast('Разрешены только PNG файлы', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('texture', file);
+    
+    try {
+        const response = await fetch('/api/textures', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            showToast(`Текстура ${file.name} загружена!`, 'success');
+            await loadData();
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Ошибка загрузки', 'error');
+        }
+    } catch (error) {
+        showToast('Ошибка загрузки', 'error');
+        console.error(error);
+    }
 }
 

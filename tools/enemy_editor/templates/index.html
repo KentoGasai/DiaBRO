@@ -26,12 +26,23 @@
             </div>
             
             <div class="sidebar-section">
-                <h3>Спрайты</h3>
+                <h3>Спрайты врагов</h3>
                 <div class="upload-zone" id="upload-zone">
                     <input type="file" id="sprite-upload" accept=".png" hidden>
                     <p>📤 Перетащите PNG или кликните</p>
                 </div>
                 <div id="sprite-list" class="sprite-list">
+                    <!-- Динамически заполняется -->
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Текстуры уровней</h3>
+                <div class="upload-zone" id="texture-upload-zone">
+                    <input type="file" id="texture-upload" accept=".png" hidden>
+                    <p>🗺️ Добавить текстуру</p>
+                </div>
+                <div id="texture-list" class="sprite-list">
                     <!-- Динамически заполняется -->
                 </div>
             </div>
@@ -53,6 +64,11 @@
                 
                 <form id="enemy-form" class="editor-form">
                     <input type="hidden" id="enemy-id">
+                    
+                    <!-- Превью анимации -->
+                    <div class="editor-preview-container">
+                        <canvas id="editor-preview-canvas" width="500" height="500"></canvas>
+                    </div>
                     
                     <div class="form-row">
                         <div class="form-group">
@@ -85,7 +101,19 @@
                                 <option value="">-- Без оружия --</option>
                             </select>
                         </div>
-                        <p class="form-hint">Масштаб 1.0 = размер игрока (256px). 0.5 = вдвое меньше, 1.5 = в 1.5 раза больше.</p>
+                        <div class="form-row" id="weapon-offset-row" style="display: none;">
+                            <div class="form-group">
+                                <label for="weapon-offset-x">Смещение X</label>
+                                <input type="number" id="weapon-offset-x" value="0" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="weapon-offset-y">Смещение Y</label>
+                                <input type="number" id="weapon-offset-y" value="0" step="1">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-full" id="preview-btn" onclick="togglePreviewPanel()">
+                            👁️ Превью
+                        </button>
                     </div>
                     
                     <div class="form-section">
@@ -180,56 +208,6 @@
                 </form>
             </div>
             
-            <!-- Sprite Preview -->
-            <div id="preview-panel" class="preview-panel">
-                <div class="preview-header">
-                    <h3>Предпросмотр и сравнение размеров</h3>
-                    <button id="close-preview-btn" class="btn btn-small btn-close-preview hidden" onclick="closePreview()">✕ Закрыть</button>
-                </div>
-                <div id="sprite-preview" class="sprite-preview">
-                    <p class="placeholder">Выберите спрайт для предпросмотра</p>
-                </div>
-                <div id="animation-preview" class="animation-preview hidden">
-                    <div class="comparison-container">
-                        <!-- Игрок (референс) -->
-                        <div class="comparison-item">
-                            <canvas id="player-canvas" width="256" height="256"></canvas>
-                            <div class="comparison-label">
-                                <span class="label-icon">👤</span>
-                                <span>Игрок (1.0x)</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Противник -->
-                        <div class="comparison-item">
-                            <canvas id="animation-canvas" width="256" height="256"></canvas>
-                            <div class="comparison-label">
-                                <span class="label-icon">👾</span>
-                                <span id="enemy-scale-label">Противник (1.0x)</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="size-controls">
-                        <label for="preview-scale">Размер противника:</label>
-                        <input type="range" id="preview-scale" min="0.3" max="2.0" step="0.1" value="1.0">
-                        <span id="preview-scale-value">1.0x</span>
-                        <button class="btn btn-small" onclick="applyScaleToForm()">Применить</button>
-                    </div>
-                    
-                    <div class="animation-controls">
-                        <button class="btn btn-small" onclick="prevDirection()">◀</button>
-                        <span id="direction-label">Направление: 0</span>
-                        <button class="btn btn-small" onclick="nextDirection()">▶</button>
-                    </div>
-                    
-                    <div class="animation-info">
-                        <p>Формат спрайтшита: 8 строк × 8 столбцов, 256×256 px/кадр</p>
-                        <p>Масштаб 1.0 = размер игрока (256px в игре)</p>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Welcome Panel -->
             <div id="welcome-panel" class="welcome-panel">
                 <div class="welcome-content">
@@ -252,6 +230,73 @@
                 </div>
             </div>
         </main>
+        
+        <!-- Preview Panel (справа, появляется по кнопке) -->
+        <aside id="preview-sidebar" class="preview-sidebar hidden">
+            <div class="preview-sidebar-header">
+                <h3>Превью</h3>
+                <button class="btn-close" onclick="togglePreviewPanel()">×</button>
+            </div>
+            <div class="preview-sidebar-content">
+                <!-- Сравнение размеров -->
+                <div class="comparison-section">
+                    <h4>Сравнение размеров</h4>
+                    <div class="comparison-row">
+                        <div class="comparison-item-small">
+                            <canvas id="player-canvas" width="128" height="128"></canvas>
+                            <span>Игрок (1.0x)</span>
+                        </div>
+                        <div class="comparison-item-small">
+                            <canvas id="enemy-canvas" width="128" height="128"></canvas>
+                            <span id="enemy-scale-label">Противник (1.0x)</span>
+                        </div>
+                    </div>
+                    <div class="scale-slider">
+                        <label>Размер:</label>
+                        <input type="range" id="preview-scale" min="0.3" max="2.0" step="0.1" value="1.0">
+                        <span id="preview-scale-value">1.0x</span>
+                    </div>
+                    <button class="btn btn-small btn-full" onclick="applyScaleToForm()">Применить масштаб</button>
+                </div>
+                
+                <!-- Настройка оружия -->
+                <div class="weapon-section" id="weapon-section">
+                    <h4>Позиция оружия</h4>
+                    <div class="weapon-preview-container">
+                        <canvas id="weapon-preview-canvas" width="160" height="160"></canvas>
+                    </div>
+                    <div class="offset-controls">
+                        <div class="offset-row">
+                            <label>X:</label>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(-5, 0)">-5</button>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(-1, 0)">-1</button>
+                            <span id="offset-x-display">0</span>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(1, 0)">+1</button>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(5, 0)">+5</button>
+                        </div>
+                        <div class="offset-row">
+                            <label>Y:</label>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(0, -5)">-5</button>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(0, -1)">-1</button>
+                            <span id="offset-y-display">0</span>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(0, 1)">+1</button>
+                            <button class="btn btn-tiny" onclick="adjustWeaponOffset(0, 5)">+5</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-small btn-full" onclick="applyWeaponOffsetToForm()">Применить смещение</button>
+                </div>
+                
+                <!-- Направление -->
+                <div class="direction-section">
+                    <h4>Направление</h4>
+                    <div class="direction-controls">
+                        <button class="btn btn-small" onclick="prevDirection()">◀</button>
+                        <span id="direction-label">Вправо</span>
+                        <button class="btn btn-small" onclick="nextDirection()">▶</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
     </div>
     
     <!-- Export Modal -->
@@ -275,4 +320,3 @@
     <script src="/static/app.js"></script>
 </body>
 </html>
-

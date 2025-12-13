@@ -43,7 +43,7 @@ class Enemy:
     
     def __init__(self, x, y, max_health=30, damage=5, 
                  sprite_path=None, weapon_path=None, sprite_scale=1.0,
-                 attack_type='melee', projectile_path=None):
+                 attack_type='melee', projectile_path=None, weapon_offset=(0, 0)):
         """
         Args:
             x, y: Начальная позиция в мировых координатах
@@ -54,6 +54,7 @@ class Enemy:
             sprite_scale: Масштаб спрайтов (1.0 = размер игрока)
             attack_type: Тип атаки ('melee' или 'ranged')
             projectile_path: Путь к спрайту снаряда (для ranged)
+            weapon_offset: Смещение оружия (x, y) в пикселях
         """
         self.world_x = x
         self.world_y = y
@@ -71,8 +72,9 @@ class Enemy:
         # Спрайтовая анимация
         self.animated_sprite = None
         self.use_sprites = False
+        self.weapon_offset = weapon_offset
         if sprite_path:
-            self.set_sprite(sprite_path, weapon_path, sprite_scale)
+            self.set_sprite(sprite_path, weapon_path, sprite_scale, weapon_offset=weapon_offset)
         
         # Тип атаки
         self.attack_type = attack_type  # 'melee' или 'ranged'
@@ -102,7 +104,7 @@ class Enemy:
         self.attack_animation_duration = 0.3  # 0.3 секунды на анимацию атаки
         self.is_attacking = False
     
-    def set_sprite(self, sprite_path, weapon_path=None, scale=0.25, animation_speeds=None):
+    def set_sprite(self, sprite_path, weapon_path=None, scale=0.25, animation_speeds=None, weapon_offset=(0, 0)):
         """
         Устанавливает спрайт для врага
         
@@ -111,12 +113,14 @@ class Enemy:
             weapon_path: Путь к спрайтшиту оружия (опционально)
             scale: Масштаб спрайтов
             animation_speeds: Словарь скоростей анимаций (опционально)
+            weapon_offset: Смещение оружия (x, y) в пикселях
         """
         self.animated_sprite = AnimatedSprite(
             sprite_path=sprite_path,
             weapon_path=weapon_path,
             scale=scale,
-            animation_speeds=animation_speeds
+            animation_speeds=animation_speeds,
+            weapon_offset=weapon_offset
         )
         self.use_sprites = self.animated_sprite.is_loaded()
         
@@ -178,7 +182,13 @@ class Enemy:
                 # Атакуем игрока
                 attack_info = {
                     'damage': self.damage,
-                    'attacker': self
+                    'attacker': self,
+                    'is_melee': self.is_melee,
+                    'start_x': self.world_x,
+                    'start_y': self.world_y,
+                    'target_x': player_x,
+                    'target_y': player_y,
+                    'projectile_path': self.projectile_path
                 }
                 self.attack_cooldown = self.attack_cooldown_time
                 
@@ -188,7 +198,7 @@ class Enemy:
                 
                 if self.use_sprites and self.animated_sprite:
                     self.animated_sprite.play_attack(
-                        is_melee=True,
+                        is_melee=self.is_melee,
                         on_complete=self._on_attack_complete
                     )
             elif distance > self.attack_range:
@@ -480,6 +490,11 @@ def create_enemy(x, y, enemy_type='default', **kwargs):
     # Определяем тип атаки
     attack_type = params.get('attack_type', 'melee')
     
+    # Получаем смещение оружия
+    weapon_offset = params.get('weapon_offset', [0, 0])
+    if isinstance(weapon_offset, list):
+        weapon_offset = tuple(weapon_offset)
+    
     # Создаём врага
     enemy = Enemy(
         x=x,
@@ -490,7 +505,8 @@ def create_enemy(x, y, enemy_type='default', **kwargs):
         weapon_path=params.get('weapon_path'),
         sprite_scale=params.get('sprite_scale', 1.0),
         attack_type=attack_type,
-        projectile_path=params.get('projectile_path')
+        projectile_path=params.get('projectile_path'),
+        weapon_offset=weapon_offset
     )
     
     # Дополнительные параметры

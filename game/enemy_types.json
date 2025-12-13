@@ -36,5 +36,24 @@
       50,
       50
     ]
+  },
+  "magician": {
+    "name": "Маг",
+    "sprite_path": "game/images/enemy/magician.png",
+    "weapon_path": "game/images/weapon/male_staff.png",
+    "projectile_path": "",
+    "sprite_scale": 1.0,
+    "max_health": 30,
+    "damage": 5,
+    "speed": 6.0,
+    "attack_type": "ranged",
+    "aggro_range": 150.0,
+    "attack_range": 8.0,
+    "attack_cooldown": 1.5,
+    "color": [
+      200,
+      50,
+      50
+    ]
   }
 }

@@ -1,0 +1,695 @@
+{
+  "name": "new_level",
+  "width": 20,
+  "height": 20,
+  "tiles": {
+    "8,7": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,8": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "9,8": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "9,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "9,10": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "9,11": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,11": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "6,11": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,10": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,10": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,9": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "3,8": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "3,7": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "3,6": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,6": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,5": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "6,6": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,6": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "11,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,11": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "12,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "11,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "9,12": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "7,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "3,9": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,7": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,6": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "7,6": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "9,7": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "10,11": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "8,12": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "6,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,11": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,8": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "6,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "7,10": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "9,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "8,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "7,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "4,11": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,8": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,7": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "6,7": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "6,8": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "7,9": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "7,11": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "7,15": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "6,17": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "6,18": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,19": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,18": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,16": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "7,14": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "5,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "3,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "9,15": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,16": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,16": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,15": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,15": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,14": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "4,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "4,14": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "5,15": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "8,17": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "10,18": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "12,18": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "14,17": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "15,16": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "16,15": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "17,14": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "18,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "18,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "17,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "17,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "18,14": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "19,15": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "19,16": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "14,15": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "12,16": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "12,15": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "12,14": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "13,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "14,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "15,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "16,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "18,15": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "19,14": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "19,13": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "19,12": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "18,11": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "17,9": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "15,8": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "14,7": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "13,7": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,7": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,6": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,6": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "13,6": {
+      "tileset": "grass_green_128x64",
+      "tile": 9
+    },
+    "11,7": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,7": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "10,8": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,8": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,8": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,10": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "13,11": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "14,11": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "14,12": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "13,10": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "13,12": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,10": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,12": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,12": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "9,16": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "6,14": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "5,13": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "8,14": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "8,15": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,14": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "8,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "7,8": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,11": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "8,10": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "13,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "14,9": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "14,10": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "13,8": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,6": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "10,5": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "10,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "10,3": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,5": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,4": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "11,3": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,3": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,4": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "12,5": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "9,5": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "10,2": {
+      "tileset": "grass_dry_128x64",
+      "tile": 0
+    },
+    "4,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "5,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "7,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "8,5": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "9,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "8,2": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "6,1": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "5,1": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "4,2": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "4,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "6,5": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "9,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "8,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "7,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "6,2": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "5,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "7,7": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "6,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "6,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "5,2": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "4,0": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "4,1": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "3,1": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "2,2": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "3,3": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "3,4": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "4,5": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    },
+    "3,2": {
+      "tileset": "forest_ground_128x64",
+      "tile": 1
+    }
+  }
+}

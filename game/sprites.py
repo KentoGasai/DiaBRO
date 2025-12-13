@@ -84,15 +84,17 @@ class CharacterSprites:
         7: 5,   # вправо-вниз (315°)
     }
     
-    def __init__(self, character_path, weapon_path=None, scale=0.25):
+    def __init__(self, character_path, weapon_path=None, scale=0.25, weapon_offset=(0, 0)):
         """
         Args:
             character_path: Путь к спрайтшиту персонажа
             weapon_path: Путь к спрайтшиту оружия (опционально)
             scale: Масштаб спрайтов (256px * 0.25 = 64px)
+            weapon_offset: Смещение оружия (x, y) в пикселях исходного спрайта
         """
         self.scale = scale
         self.frame_size = int(256 * scale)  # Размер кадра после масштабирования
+        self.weapon_offset = weapon_offset  # Смещение оружия
         
         # Загрузка спрайтшитов
         self.character_sheet = SpriteSheet(character_path, 256, 256)
@@ -131,9 +133,12 @@ class CharacterSprites:
                     )
                     # Объединяем спрайты персонажа и оружия
                     combined_frames = []
+                    # Смещение с учётом масштаба
+                    offset_x = int(self.weapon_offset[0] * self.scale)
+                    offset_y = int(self.weapon_offset[1] * self.scale)
                     for char_frame, weapon_frame in zip(char_frames, weapon_frames):
                         combined = char_frame.copy()
-                        combined.blit(weapon_frame, (0, 0))
+                        combined.blit(weapon_frame, (offset_x, offset_y))
                         combined_frames.append(combined)
                     self.animation_cache[(anim_name, direction)] = combined_frames
                 else:
@@ -307,7 +312,7 @@ class AnimatedSprite:
     """
     
     def __init__(self, sprite_path, weapon_path=None, scale=0.25, 
-                 animation_speeds=None, vertical_offset=0.25):
+                 animation_speeds=None, vertical_offset=0.25, weapon_offset=(0, 0)):
         """
         Args:
             sprite_path: Путь к спрайтшиту
@@ -315,11 +320,13 @@ class AnimatedSprite:
             scale: Масштаб спрайтов (256px * scale)
             animation_speeds: Словарь скоростей анимаций (опционально)
             vertical_offset: Вертикальное смещение для позиционирования (доля от размера кадра)
+            weapon_offset: Смещение оружия (x, y) в пикселях исходного спрайта (до масштабирования)
         """
         self.sprites = None
         self.animation = None
         self.loaded = False
         self.vertical_offset = vertical_offset
+        self.weapon_offset = weapon_offset
         
         # Текущее состояние
         self.current_state = 'idle'  # idle, walk, attack, hurt, death
@@ -359,7 +366,8 @@ class AnimatedSprite:
                 self.sprites = CharacterSprites(
                     full_sprite_path,
                     full_weapon_path if full_weapon_path and os.path.exists(full_weapon_path) else None,
-                    scale=scale
+                    scale=scale,
+                    weapon_offset=self.weapon_offset
                 )
                 self.animation = AnimationController(self.sprites)
                 
