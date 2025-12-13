@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiaBRO - Редактор врагов</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🎮 DiaBRO</h1>
+                <h2>Редактор врагов</h2>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Типы врагов</h3>
+                <button class="btn btn-primary btn-full" onclick="createNewEnemy()">
+                    + Новый тип врага
+                </button>
+                <div id="enemy-list" class="enemy-list">
+                    <!-- Динамически заполняется -->
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>Спрайты</h3>
+                <div class="upload-zone" id="upload-zone">
+                    <input type="file" id="sprite-upload" accept=".png" hidden>
+                    <p>📤 Перетащите PNG или кликните</p>
+                </div>
+                <div id="sprite-list" class="sprite-list">
+                    <!-- Динамически заполняется -->
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <button class="btn btn-secondary btn-full" onclick="exportCode()">
+                    📋 Экспорт кода
+                </button>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <div id="editor-panel" class="editor-panel hidden">
+                <div class="editor-header">
+                    <h2 id="editor-title">Редактирование врага</h2>
+                    <button class="btn btn-danger" onclick="deleteEnemy()">🗑️ Удалить</button>
+                </div>
+                
+                <form id="enemy-form" class="editor-form">
+                    <input type="hidden" id="enemy-id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="enemy-name">Название</label>
+                            <input type="text" id="enemy-name" placeholder="Скелет">
+                        </div>
+                        <div class="form-group">
+                            <label for="enemy-id-input">ID (латиница)</label>
+                            <input type="text" id="enemy-id-input" placeholder="skeleton">
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Спрайт</h3>
+                        <div class="form-row">
+                            <div class="form-group flex-2">
+                                <label for="sprite-path">Спрайт персонажа</label>
+                                <select id="sprite-path">
+                                    <option value="">-- Без спрайта --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="sprite-scale">Масштаб (1.0 = игрок)</label>
+                                <input type="number" id="sprite-scale" value="1.0" step="0.1" min="0.3" max="2.0">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="weapon-path">Спрайт оружия (опционально)</label>
+                            <select id="weapon-path">
+                                <option value="">-- Без оружия --</option>
+                            </select>
+                        </div>
+                        <p class="form-hint">Масштаб 1.0 = размер игрока (256px). 0.5 = вдвое меньше, 1.5 = в 1.5 раза больше.</p>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Характеристики</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="max-health">Здоровье</label>
+                                <input type="number" id="max-health" value="30" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="damage">Урон</label>
+                                <input type="number" id="damage" value="5" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="speed">Скорость</label>
+                                <input type="number" id="speed" value="6.0" step="0.5" min="0.5" max="20">
+                                <span class="input-hint">Игрок: 8.0</span>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="aggro-range">Радиус агрессии</label>
+                                <input type="number" id="aggro-range" value="150" step="10" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="attack-range">Дистанция атаки</label>
+                                <input type="number" id="attack-range" value="1.2" step="0.1" min="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="attack-cooldown">Перезарядка атаки</label>
+                                <input type="number" id="attack-cooldown" value="1.5" step="0.1" min="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Тип атаки</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Тип боя</label>
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" name="attack-type" value="melee" checked>
+                                        <span class="radio-icon">⚔️</span>
+                                        <span>Ближний бой</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" name="attack-type" value="ranged">
+                                        <span class="radio-icon">🏹</span>
+                                        <span>Дальний бой</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row" id="projectile-row" style="display: none;">
+                            <div class="form-group">
+                                <label for="projectile-path">Спрайт снаряда</label>
+                                <select id="projectile-path">
+                                    <option value="">-- Стандартный (как у игрока) --</option>
+                                </select>
+                                <span class="input-hint">Загрузите PNG спрайт снаряда</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Внешний вид (fallback)</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="color-r">Цвет R</label>
+                                <input type="number" id="color-r" value="200" min="0" max="255">
+                            </div>
+                            <div class="form-group">
+                                <label for="color-g">Цвет G</label>
+                                <input type="number" id="color-g" value="50" min="0" max="255">
+                            </div>
+                            <div class="form-group">
+                                <label for="color-b">Цвет B</label>
+                                <input type="number" id="color-b" value="50" min="0" max="255">
+                            </div>
+                            <div class="form-group">
+                                <label>Превью</label>
+                                <div id="color-preview" class="color-preview"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-large">💾 Сохранить</button>
+                        <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Отмена</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Sprite Preview -->
+            <div id="preview-panel" class="preview-panel">
+                <div class="preview-header">
+                    <h3>Предпросмотр и сравнение размеров</h3>
+                    <button id="close-preview-btn" class="btn btn-small btn-close-preview hidden" onclick="closePreview()">✕ Закрыть</button>
+                </div>
+                <div id="sprite-preview" class="sprite-preview">
+                    <p class="placeholder">Выберите спрайт для предпросмотра</p>
+                </div>
+                <div id="animation-preview" class="animation-preview hidden">
+                    <div class="comparison-container">
+                        <!-- Игрок (референс) -->
+                        <div class="comparison-item">
+                            <canvas id="player-canvas" width="256" height="256"></canvas>
+                            <div class="comparison-label">
+                                <span class="label-icon">👤</span>
+                                <span>Игрок (1.0x)</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Противник -->
+                        <div class="comparison-item">
+                            <canvas id="animation-canvas" width="256" height="256"></canvas>
+                            <div class="comparison-label">
+                                <span class="label-icon">👾</span>
+                                <span id="enemy-scale-label">Противник (1.0x)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="size-controls">
+                        <label for="preview-scale">Размер противника:</label>
+                        <input type="range" id="preview-scale" min="0.3" max="2.0" step="0.1" value="1.0">
+                        <span id="preview-scale-value">1.0x</span>
+                        <button class="btn btn-small" onclick="applyScaleToForm()">Применить</button>
+                    </div>
+                    
+                    <div class="animation-controls">
+                        <button class="btn btn-small" onclick="prevDirection()">◀</button>
+                        <span id="direction-label">Направление: 0</span>
+                        <button class="btn btn-small" onclick="nextDirection()">▶</button>
+                    </div>
+                    
+                    <div class="animation-info">
+                        <p>Формат спрайтшита: 8 строк × 8 столбцов, 256×256 px/кадр</p>
+                        <p>Масштаб 1.0 = размер игрока (256px в игре)</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Welcome Panel -->
+            <div id="welcome-panel" class="welcome-panel">
+                <div class="welcome-content">
+                    <h2>👋 Добро пожаловать в редактор врагов!</h2>
+                    <p>Здесь вы можете создавать и настраивать типы врагов для игры.</p>
+                    <div class="welcome-steps">
+                        <div class="step">
+                            <span class="step-num">1</span>
+                            <span>Загрузите спрайтшит в формате PNG (8×8 кадров, 256×256 px каждый)</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">2</span>
+                            <span>Создайте новый тип врага и настройте параметры</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-num">3</span>
+                            <span>Экспортируйте код и добавьте в игру</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Export Modal -->
+    <div id="export-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Экспорт кода</h3>
+                <button class="btn-close" onclick="closeExportModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Скопируйте этот код в <code>ENEMY_TYPES</code> в файле <code>game/enemy.py</code>:</p>
+                <textarea id="export-code" readonly></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="copyCode()">📋 Копировать</button>
+                <button class="btn btn-secondary" onclick="closeExportModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
+

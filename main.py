@@ -12,7 +12,7 @@ from game.player import Player
 from game.camera import Camera
 from game.combat import CombatSystem
 from game.location import Location, LocationManager
-from game.enemy import Enemy
+from game.enemy import Enemy, create_enemy, get_enemy_types, reload_enemy_types
 
 # Константы
 SCREEN_WIDTH = 1280
@@ -74,13 +74,18 @@ class Game:
         # Меню паузы
         self.menu_items = [
             {"text": "Продолжить", "action": self._resume_game},
-            {"text": "Спавн врагов (5)", "action": lambda: self._spawn_enemies(5)},
-            {"text": "Спавн врагов (10)", "action": lambda: self._spawn_enemies(10)},
+            {"text": "Противники ▶", "action": self._open_enemy_submenu},
             {"text": "Убить всех врагов", "action": self._kill_all_enemies},
             {"text": "Перезапуск", "action": self._restart_game},
             {"text": "Выход", "action": self._quit_game},
         ]
         self.selected_menu_item = 0
+        
+        # Подменю противников
+        self.in_enemy_submenu = False
+        self.enemy_submenu_items = []
+        self.selected_enemy_type = 0
+        self._build_enemy_submenu()
     
     def _setup_locations(self):
         """Настройка локаций"""
@@ -91,8 +96,25 @@ class Game:
         self.location_manager.add_location(field_location)
         self.location_manager.set_location("field")
     
-    def _spawn_enemies(self, count=5):
-        """Спавнит врагов вокруг игрока"""
+    def _spawn_enemies(self, count=5, enemy_type='default'):
+        """
+        Спавнит врагов вокруг игрока
+        
+        Args:
+            count: Количество врагов
+            enemy_type: Тип врага ('default', 'skeleton', 'zombie' и т.д.)
+                       Если спрайты не найдены, используется fallback отрисовка
+        
+        Примеры использования со спрайтами:
+            # Враги со спрайтами (поместите спрайты в game/images/enemy/)
+            self._spawn_enemies(5, enemy_type='skeleton')
+            
+            # Или напрямую через Enemy:
+            enemy = Enemy(x, y, sprite_path='game/images/enemy/skeleton.png')
+            
+            # Или через фабрику create_enemy:
+            enemy = create_enemy(x, y, enemy_type='skeleton', max_health=50)
+        """
         location = self.location_manager.get_current_location()
         if not location:
             return
@@ -104,7 +126,9 @@ class Game:
             distance = random.uniform(3, 6)  # В мировых координатах
             x = player_x + math.cos(angle) * distance
             y = player_y + math.sin(angle) * distance
-            enemy = Enemy(x, y, max_health=30, damage=8)
+            
+            # Используем фабрику для создания врагов с разными типами
+            enemy = create_enemy(x, y, enemy_type=enemy_type, max_health=30, damage=8)
             location.enemies.append(enemy)
     
     def run(self):
@@ -159,12 +183,32 @@ class Game:
     
     def _handle_menu_input(self, event):
         """Обработка ввода в меню"""
+        if self.in_enemy_submenu:
+            self._handle_enemy_submenu_input(event)
+        else:
+            self._handle_main_menu_input(event)
+    
+    def _handle_main_menu_input(self, event):
+        """Обработка ввода в главном меню"""
         if event.key == pygame.K_UP or event.key == pygame.K_w:
             self.selected_menu_item = (self.selected_menu_item - 1) % len(self.menu_items)
         elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
             self.selected_menu_item = (self.selected_menu_item + 1) % len(self.menu_items)
         elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
             self.menu_items[self.selected_menu_item]["action"]()
+    
+    def _handle_enemy_submenu_input(self, event):
+        """Обработка ввода в подменю противников"""
+        if event.key == pygame.K_UP or event.key == pygame.K_w:
+            self.selected_enemy_type = (self.selected_enemy_type - 1) % len(self.enemy_submenu_items)
+        elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+            self.selected_enemy_type = (self.selected_enemy_type + 1) % len(self.enemy_submenu_items)
+        elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+            self.enemy_submenu_items[self.selected_enemy_type]["action"]()
+        elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
+            self._close_enemy_submenu()
+        elif event.key == pygame.K_ESCAPE:
+            self._close_enemy_submenu()
     
     def _restart_game(self):
         """Перезапуск игры"""
@@ -187,6 +231,50 @@ class Game:
         location = self.location_manager.get_current_location()
         if location:
             location.enemies.clear()
+    
+    def _build_enemy_submenu(self):
+        """Создаёт подменю с типами врагов"""
+        enemy_types = get_enemy_types()
+        
+        self.enemy_submenu_items = [
+            {"text": "◀ Назад", "action": self._close_enemy_submenu, "type": None}
+        ]
+        
+        for enemy_id, enemy_data in enemy_types.items():
+            name = enemy_data.get('name', enemy_id)
+            hp = enemy_data.get('max_health', 30)
+            dmg = enemy_data.get('damage', 5)
+            
+            self.enemy_submenu_items.append({
+                "text": f"{name} (HP:{hp} DMG:{dmg})",
+                "action": lambda eid=enemy_id: self._spawn_enemy_type(eid),
+                "type": enemy_id
+            })
+        
+        self.enemy_submenu_items.append({
+            "text": "🔄 Обновить список", 
+            "action": self._refresh_enemy_types,
+            "type": None
+        })
+    
+    def _open_enemy_submenu(self):
+        """Открывает подменю противников"""
+        self._build_enemy_submenu()
+        self.in_enemy_submenu = True
+        self.selected_enemy_type = 0
+    
+    def _close_enemy_submenu(self):
+        """Закрывает подменю противников"""
+        self.in_enemy_submenu = False
+    
+    def _spawn_enemy_type(self, enemy_type):
+        """Спавнит врага выбранного типа"""
+        self._spawn_enemies(1, enemy_type=enemy_type)
+    
+    def _refresh_enemy_types(self):
+        """Обновляет список типов врагов из конфига"""
+        reload_enemy_types()
+        self._build_enemy_submenu()
     
     def _update(self, dt):
         """Обновление игровой логики"""
@@ -505,6 +593,13 @@ class Game:
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
         
+        if self.in_enemy_submenu:
+            self._draw_enemy_submenu()
+        else:
+            self._draw_main_menu()
+    
+    def _draw_main_menu(self):
+        """Отрисовка главного меню паузы"""
         # Заголовок
         title = self.font_large.render("ПАУЗА", True, WHITE)
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 150))
@@ -513,7 +608,6 @@ class Game:
         # Пункты меню
         menu_y = 220
         for i, item in enumerate(self.menu_items):
-            # Цвет: выделенный пункт - жёлтый, остальные - серые
             if i == self.selected_menu_item:
                 color = (255, 255, 100)
                 prefix = "> "
@@ -530,6 +624,72 @@ class Game:
         
         # Подсказка
         hint = self.font_small.render("W/S или ↑/↓ - выбор, Enter - подтверждение, ESC - закрыть", True, GRAY)
+        hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        self.screen.blit(hint, hint_rect)
+    
+    def _draw_enemy_submenu(self):
+        """Отрисовка подменю противников"""
+        # Заголовок
+        title = self.font_large.render("ПРОТИВНИКИ", True, WHITE)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
+        self.screen.blit(title, title_rect)
+        
+        # Подсказка
+        subtitle = self.font_small.render("Выберите тип врага для спавна", True, GRAY)
+        subtitle_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 135))
+        self.screen.blit(subtitle, subtitle_rect)
+        
+        # Пункты подменю (с прокруткой если много)
+        visible_items = 12
+        start_idx = max(0, self.selected_enemy_type - visible_items // 2)
+        end_idx = min(len(self.enemy_submenu_items), start_idx + visible_items)
+        
+        if end_idx - start_idx < visible_items:
+            start_idx = max(0, end_idx - visible_items)
+        
+        menu_y = 180
+        for i in range(start_idx, end_idx):
+            item = self.enemy_submenu_items[i]
+            
+            if i == self.selected_enemy_type:
+                color = (255, 255, 100)
+                prefix = "> "
+                suffix = " <"
+            else:
+                color = GRAY
+                prefix = "  "
+                suffix = "  "
+            
+            # Цветной индикатор для типов врагов
+            if item.get("type"):
+                enemy_types = get_enemy_types()
+                enemy_data = enemy_types.get(item["type"], {})
+                enemy_color = enemy_data.get('color', (200, 50, 50))
+                if isinstance(enemy_color, list):
+                    enemy_color = tuple(enemy_color)
+                
+                # Квадрат с цветом врага
+                indicator_x = SCREEN_WIDTH // 2 - 180
+                indicator_rect = pygame.Rect(indicator_x, menu_y - 8, 16, 16)
+                pygame.draw.rect(self.screen, enemy_color, indicator_rect)
+                pygame.draw.rect(self.screen, WHITE, indicator_rect, 1)
+            
+            text = self.font_medium.render(f"{prefix}{item['text']}{suffix}", True, color)
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, menu_y))
+            self.screen.blit(text, text_rect)
+            menu_y += 35
+        
+        # Индикатор прокрутки
+        if start_idx > 0:
+            arrow_up = self.font_medium.render("▲", True, GRAY)
+            self.screen.blit(arrow_up, (SCREEN_WIDTH // 2 - 8, 160))
+        
+        if end_idx < len(self.enemy_submenu_items):
+            arrow_down = self.font_medium.render("▼", True, GRAY)
+            self.screen.blit(arrow_down, (SCREEN_WIDTH // 2 - 8, menu_y + 5))
+        
+        # Подсказка
+        hint = self.font_small.render("W/S - выбор, Enter - спавн, ← или ESC - назад", True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
         self.screen.blit(hint, hint_rect)
 

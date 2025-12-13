@@ -1,0 +1,21 @@
+{
+  "skeleton": {
+    "name": "Скелет",
+    "sprite_path": "game/images/enemy/skeleton.png",
+    "weapon_path": "",
+    "projectile_path": "",
+    "sprite_scale": 0.9,
+    "max_health": 30,
+    "damage": 5,
+    "speed": 6.0,
+    "attack_type": "melee",
+    "aggro_range": 150.0,
+    "attack_range": 1.2,
+    "attack_cooldown": 1.5,
+    "color": [
+      200,
+      50,
+      50
+    ]
+  }
+}

@@ -280,3 +280,247 @@ class AnimationController:
         """Возвращает размер кадра"""
         return self.sprites.frame_size
 
+
+class AnimatedSprite:
+    """
+    Универсальный компонент анимации для передвигающихся объектов.
+    
+    Можно подключить к любому объекту (враг, NPC, снаряд и т.д.) для добавления
+    спрайтовой анимации с 8 направлениями.
+    
+    Использование:
+        # Создание
+        animated = AnimatedSprite(
+            sprite_path='game/images/enemy/skeleton.png',
+            weapon_path=None,  # Опционально
+            scale=0.5
+        )
+        
+        # В методе update объекта:
+        if animated.is_loaded():
+            animated.set_direction(self.angle)
+            animated.update(dt, is_walking=is_moving)
+        
+        # В методе draw:
+        if animated.is_loaded():
+            animated.draw(screen, screen_x, screen_y)
+    """
+    
+    def __init__(self, sprite_path, weapon_path=None, scale=0.25, 
+                 animation_speeds=None, vertical_offset=0.25):
+        """
+        Args:
+            sprite_path: Путь к спрайтшиту
+            weapon_path: Путь к спрайтшиту оружия (опционально)
+            scale: Масштаб спрайтов (256px * scale)
+            animation_speeds: Словарь скоростей анимаций (опционально)
+            vertical_offset: Вертикальное смещение для позиционирования (доля от размера кадра)
+        """
+        self.sprites = None
+        self.animation = None
+        self.loaded = False
+        self.vertical_offset = vertical_offset
+        
+        # Текущее состояние
+        self.current_state = 'idle'  # idle, walk, attack, hurt, death
+        self.is_walking = False
+        self.is_attacking = False
+        self.is_hurt = False
+        self.is_dying = False
+        
+        # Попытка загрузки спрайтов
+        self._load_sprites(sprite_path, weapon_path, scale, animation_speeds)
+    
+    def _load_sprites(self, sprite_path, weapon_path, scale, animation_speeds):
+        """Загружает спрайты"""
+        import sys
+        
+        # Определяем путь (поддержка PyInstaller)
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(__file__))
+        
+        # Если путь относительный, добавляем base_path
+        if not os.path.isabs(sprite_path):
+            full_sprite_path = os.path.join(base_path, sprite_path)
+        else:
+            full_sprite_path = sprite_path
+        
+        full_weapon_path = None
+        if weapon_path:
+            if not os.path.isabs(weapon_path):
+                full_weapon_path = os.path.join(base_path, weapon_path)
+            else:
+                full_weapon_path = weapon_path
+        
+        if os.path.exists(full_sprite_path):
+            try:
+                self.sprites = CharacterSprites(
+                    full_sprite_path,
+                    full_weapon_path if full_weapon_path and os.path.exists(full_weapon_path) else None,
+                    scale=scale
+                )
+                self.animation = AnimationController(self.sprites)
+                
+                # Кастомные скорости анимаций
+                if animation_speeds:
+                    self.animation.animation_speeds.update(animation_speeds)
+                
+                self.loaded = True
+            except Exception as e:
+                print(f"Ошибка загрузки спрайтов {full_sprite_path}: {e}")
+                self.loaded = False
+        else:
+            print(f"Спрайты не найдены: {full_sprite_path}")
+            self.loaded = False
+    
+    def is_loaded(self):
+        """Проверяет, загружены ли спрайты"""
+        return self.loaded
+    
+    def set_direction(self, angle):
+        """
+        Устанавливает направление спрайта
+        
+        Args:
+            angle: Угол в радианах
+        """
+        if self.animation:
+            self.animation.set_direction(angle)
+    
+    def update(self, dt, is_walking=False):
+        """
+        Обновляет анимацию
+        
+        Args:
+            dt: Delta time
+            is_walking: Флаг движения
+        """
+        if not self.loaded:
+            return
+        
+        self.is_walking = is_walking
+        
+        # Приоритет анимаций: death > hurt > attack > walk > idle
+        if self.is_dying:
+            # Анимация смерти уже запущена
+            self.animation.update(dt)
+        elif self.is_hurt:
+            self.animation.update(dt)
+        elif self.is_attacking:
+            self.animation.update(dt)
+        elif self.is_walking:
+            self.animation.play('walk')
+            self.animation.update(dt)
+        else:
+            # Idle = первый кадр walk
+            self.animation.current_animation = 'walk'
+            self.animation.current_frame = 0
+            self.animation.animation_time = 0.0
+    
+    def play_attack(self, is_melee=True, on_complete=None):
+        """
+        Запускает анимацию атаки
+        
+        Args:
+            is_melee: Ближняя атака (True) или дальняя (False)
+            on_complete: Callback по завершению
+        """
+        if not self.loaded:
+            return
+        
+        self.is_attacking = True
+        anim_name = 'attack_melee' if is_melee else 'attack_ranged'
+        
+        def complete_callback():
+            self.is_attacking = False
+            if on_complete:
+                on_complete()
+        
+        self.animation.play(anim_name, loop=False, on_complete=complete_callback)
+    
+    def play_hurt(self, on_complete=None):
+        """
+        Запускает анимацию получения урона
+        
+        Args:
+            on_complete: Callback по завершению
+        """
+        if not self.loaded:
+            return
+        
+        self.is_hurt = True
+        
+        def complete_callback():
+            self.is_hurt = False
+            if on_complete:
+                on_complete()
+        
+        self.animation.play('hurt', loop=False, on_complete=complete_callback)
+    
+    def play_death(self, on_complete=None):
+        """
+        Запускает анимацию смерти
+        
+        Args:
+            on_complete: Callback по завершению
+        """
+        if not self.loaded:
+            return
+        
+        self.is_dying = True
+        self.animation.play('death', loop=False, on_complete=on_complete)
+    
+    def get_frame_size(self):
+        """Возвращает размер кадра"""
+        if self.animation:
+            return self.animation.get_frame_size()
+        return 64  # Значение по умолчанию
+    
+    def draw(self, screen, screen_x, screen_y, alpha=255, tint_color=None):
+        """
+        Отрисовывает спрайт
+        
+        Args:
+            screen: Поверхность для отрисовки
+            screen_x, screen_y: Экранные координаты центра объекта
+            alpha: Прозрачность (0-255)
+            tint_color: Цвет оттенка (R, G, B) или None
+        """
+        if not self.loaded:
+            return
+        
+        frame = self.animation.get_current_frame()
+        frame_size = self.animation.get_frame_size()
+        
+        # Центрируем спрайт, с учётом вертикального смещения
+        draw_x = screen_x - frame_size // 2
+        draw_y = screen_y - frame_size + int(frame_size * self.vertical_offset)
+        
+        # Применяем эффекты
+        if alpha < 255 or tint_color:
+            frame = frame.copy()
+            
+            # Прозрачность
+            if alpha < 255:
+                frame.set_alpha(alpha)
+            
+            # Оттенок (например, красный при уроне)
+            if tint_color:
+                frame.fill((*tint_color, 0), special_flags=pygame.BLEND_RGB_ADD)
+        
+        screen.blit(frame, (draw_x, draw_y))
+    
+    def reset(self):
+        """Сбрасывает состояние анимации"""
+        self.is_walking = False
+        self.is_attacking = False
+        self.is_hurt = False
+        self.is_dying = False
+        self.current_state = 'idle'
+        
+        if self.animation:
+            self.animation.current_animation = 'walk'
+            self.animation.current_frame = 0
+            self.animation.animation_time = 0.0
