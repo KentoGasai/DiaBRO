@@ -16,6 +16,8 @@ class SpriteSheet:
             frame_width: Ширина одного кадра
             frame_height: Высота одного кадра
         """
+        # Оптимизация: convert_alpha() оптимизирует изображение для быстрого blitting
+        # особенно эффективно при использовании аппаратного ускорения
         self.sheet = pygame.image.load(filepath).convert_alpha()
         self.frame_width = frame_width
         self.frame_height = frame_height

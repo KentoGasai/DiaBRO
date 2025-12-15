@@ -17,8 +17,8 @@ from game.level import LevelManager
 from game.fog_of_war import FogOfWar
 
 # Константы
-SCREEN_WIDTH = 1280
-SCREEN_HEIGHT = 720
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
 FPS = 60
 
 # Цвета
@@ -36,9 +36,22 @@ class Game:
         # Инициализация Pygame
         pygame.init()
         
-        # Экран
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        # Включаем аппаратное ускорение и двойную буферизацию
+        # HWSURFACE - использование видеопамяти
+        # DOUBLEBUF - двойная буферизация для плавности
+        try:
+            self.screen = pygame.display.set_mode(
+                (SCREEN_WIDTH, SCREEN_HEIGHT),
+                pygame.HWSURFACE | pygame.DOUBLEBUF
+            )
+            print("Hardware acceleration enabled")
+        except:
+            # Если аппаратное ускорение недоступно, используем обычный режим
+            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+            print("Hardware acceleration not available, using software mode")
+        
         pygame.display.set_caption("PyDiab - Изометрическая игра")
+        # Включаем VSync для синхронизации с частотой обновления монитора
         self.clock = pygame.time.Clock()
         
         # Кэшированные шрифты (создаём один раз!)
@@ -83,11 +96,24 @@ class Game:
         self.paused = False
         self.last_time = time.time()
         
+        # Режим врагов (по умолчанию выключен)
+        self.enemies_enabled = False
+        
+        # Кэш позиции для оптимизации обновления тайлов
+        self.last_tile_update_pos = (0, 0)
+        self.tile_update_threshold = 5.0  # Обновляем тайлы только при перемещении на 5+ тайлов
+        
+        # Кэш для спавна врагов (не спавним каждый кадр)
+        self.last_enemy_spawn_pos = (0, 0)
+        self.enemy_spawn_cooldown = 0.0  # Кулдаун между проверками спавна
+        self.enemy_spawn_interval = 2.0  # Проверяем спавн раз в 2 секунды
+        
         # Меню паузы
         self.menu_items = [
             {"text": "Продолжить", "action": self._resume_game},
             {"text": "Уровни ▶", "action": self._open_level_submenu},
             {"text": "Противники ▶", "action": self._open_enemy_submenu},
+            {"text": self._get_enemy_mode_text, "action": self._toggle_enemy_mode},
             {"text": "Убить всех врагов", "action": self._kill_all_enemies},
             {"text": "Перезапуск", "action": self._restart_game},
             {"text": "Выход", "action": self._quit_game},
@@ -116,10 +142,14 @@ class Game:
     
     def _load_default_level(self):
         """Загружает уровень по умолчанию"""
-        available = self.level_manager.get_available_levels()
-        if available:
-            self.level_manager.load_level(available[0])
-            print(f"Loaded level: {available[0]}")
+        # Загружаем процедурный уровень по умолчанию
+        if self.level_manager.load_level("procedural"):
+            print("Loaded procedural level")
+        else:
+            available = self.level_manager.get_available_levels()
+            if available:
+                self.level_manager.load_level(available[0])
+                print(f"Loaded level: {available[0]}")
     
     def _spawn_enemies(self, count=5, enemy_type='default'):
         """
@@ -178,8 +208,11 @@ class Game:
             if self.paused:
                 self._draw_pause_menu()
             
-            # Обновление экрана
+            # Обновление экрана с VSync для синхронизации с частотой обновления монитора
+            # Это уменьшает разрывы экрана и использует возможности видеокарты
             pygame.display.flip()
+            # VSync автоматически синхронизирует с частотой обновления монитора
+            # при использовании DOUBLEBUF и HWSURFACE
             self.clock.tick(FPS)
         
         pygame.quit()
@@ -258,6 +291,7 @@ class Game:
         self._setup_locations()
         self.game_over = False
         self.paused = False
+        # Режим врагов остается как был (не сбрасываем)
     
     def _resume_game(self):
         """Продолжить игру"""
@@ -272,6 +306,19 @@ class Game:
         location = self.location_manager.get_current_location()
         if location:
             location.enemies.clear()
+    
+    def _get_enemy_mode_text(self):
+        """Возвращает текст для режима врагов"""
+        return f"Враги: {'ВКЛ' if self.enemies_enabled else 'ВЫКЛ'}"
+    
+    def _toggle_enemy_mode(self):
+        """Переключает режим врагов"""
+        self.enemies_enabled = not self.enemies_enabled
+        # Обновляем текст в меню
+        self.menu_items[3]["text"] = self._get_enemy_mode_text
+        # Если выключаем врагов, убиваем всех существующих
+        if not self.enemies_enabled:
+            self._kill_all_enemies()
     
     def _build_enemy_submenu(self):
         """Создаёт подменю с типами врагов"""
@@ -383,6 +430,19 @@ class Game:
         
         # Обновление тумана войны
         self.fog_of_war.update(player_x, player_y)
+        
+        # Обновление процедурного спавна врагов (с кулдауном для производительности)
+        self.enemy_spawn_cooldown -= dt
+        if self.enemy_spawn_cooldown <= 0.0:
+            # Проверяем, переместился ли игрок значительно
+            dx = player_x - self.last_enemy_spawn_pos[0]
+            dy = player_y - self.last_enemy_spawn_pos[1]
+            distance_sq = dx * dx + dy * dy
+            
+            if distance_sq >= 10.0 * 10.0:  # Проверяем спавн только при перемещении на 10+ тайлов
+                self._update_procedural_enemy_spawn(current_location, player_x, player_y)
+                self.last_enemy_spawn_pos = (player_x, player_y)
+                self.enemy_spawn_cooldown = self.enemy_spawn_interval
         
         # Обновление локации и получение атак врагов
         if current_location:
@@ -500,6 +560,98 @@ class Game:
         if world_x != 0 or world_y != 0:
             return (world_x, world_y)
         return None
+    
+    def _update_procedural_enemy_spawn(self, location, player_x, player_y):
+        """
+        Обновляет спавн врагов в процедурном мире
+        Спавнит врагов на основе точек спавна из генератора
+        """
+        # Проверяем, включен ли режим врагов
+        if not self.enemies_enabled:
+            return
+        
+        if not location:
+            return
+        
+        level = self.level_manager.get_current_level()
+        if not level or not level.procedural or not level.procedural_generator:
+            return
+        
+        # Радиус проверки спавна (оптимизирован)
+        spawn_check_radius = 30
+        
+        # Получаем точки спавна в радиусе
+        spawn_points = level.procedural_generator.get_enemy_spawn_points_in_radius(
+            player_x, player_y, spawn_check_radius
+        )
+        
+        # Создаем множество уже заспавненных позиций (чтобы не дублировать)
+        spawned_positions = set()
+        for enemy in location.enemies:
+            ex, ey = enemy.get_position()
+            # Используем более грубую сетку для проверки (каждые 5 тайлов)
+            grid_x = int(ex // 5) * 5
+            grid_y = int(ey // 5) * 5
+            spawned_positions.add((grid_x, grid_y))
+        
+        # Получаем все типы врагов кроме default
+        from game.enemy import get_enemy_types
+        enemy_types = get_enemy_types()
+        available_enemy_types = [eid for eid in enemy_types.keys() if eid != 'default']
+        
+        if not available_enemy_types:
+            return
+        
+        # Максимальное количество врагов (уменьшено)
+        max_enemies = 12
+        
+        # Спавним врагов на точках спавна
+        for x, y, biome in spawn_points:
+            # Проверяем, не превышен ли лимит
+            if len(location.enemies) >= max_enemies:
+                break
+            
+            # Проверяем расстояние от игрока (не спавним слишком близко)
+            # Уменьшено, чтобы враги были видны в радиусе тумана войны (12 тайлов)
+            dx = x - player_x
+            dy = y - player_y
+            distance_sq = dx * dx + dy * dy
+            
+            # Минимальное расстояние 15 тайлов, максимальное 30 тайлов (чтобы были видны)
+            if distance_sq < 15.0 * 15.0:  # Минимальное расстояние 15 тайлов от игрока
+                continue
+            if distance_sq > 30.0 * 30.0:  # Максимальное расстояние 30 тайлов (чтобы были видны)
+                continue
+            
+            # Проверяем, нет ли врага слишком близко (минимальное расстояние между врагами) - УВЕЛИЧЕНО
+            grid_x = int(x // 5) * 5
+            grid_y = int(y // 5) * 5
+            if (grid_x, grid_y) in spawned_positions:
+                continue
+            
+            # Проверяем расстояние до других врагов - УВЕЛИЧЕНО
+            too_close = False
+            min_enemy_distance_sq = 8.0 * 8.0  # Минимальное расстояние 8 тайлов между врагами
+            for enemy in location.enemies:
+                ex, ey = enemy.get_position()
+                edx = x - ex
+                edy = y - ey
+                enemy_distance_sq = edx * edx + edy * edy
+                if enemy_distance_sq < min_enemy_distance_sq:
+                    too_close = True
+                    break
+            
+            if too_close:
+                continue
+            
+            # Случайно выбираем тип врага
+            enemy_type = random.choice(available_enemy_types)
+            
+            # Создаем врага
+            from game.enemy import create_enemy
+            enemy = create_enemy(x, y, enemy_type=enemy_type)
+            location.enemies.append(enemy)
+            spawned_positions.add((grid_x, grid_y))
     
     def _update_location(self, location, dt, player_x, player_y):
         """Обновление локации и обработка атак врагов"""
@@ -655,18 +807,29 @@ class Game:
             self._draw_game_over()
     
     def _draw_grid(self, location, camera_offset):
-        """Отрисовка сетки"""
-        grid_size = 20
+        """Отрисовка сетки (оптимизированная версия)"""
+        # Оптимизация: уменьшаем плотность сетки и используем более эффективную отрисовку
+        grid_size = 15  # Уменьшено для производительности
         grid_color = DARK_GRAY if not location or location.name == "field" else (20, 20, 30)
         
-        for i in range(-grid_size, grid_size):
-            for j in range(-grid_size, grid_size):
+        # Предвычисляем границы экрана для оптимизации
+        screen_left = -100
+        screen_right = SCREEN_WIDTH + 100
+        screen_top = -100
+        screen_bottom = SCREEN_HEIGHT + 100
+        
+        # Рисуем только видимые точки сетки
+        for i in range(-grid_size, grid_size, 2):  # Пропускаем каждый второй для производительности
+            for j in range(-grid_size, grid_size, 2):
                 screen_x, screen_y = self.iso_converter.world_to_screen(i, j)
                 screen_x += camera_offset[0]
                 screen_y += camera_offset[1]
                 
-                if 0 <= screen_x <= SCREEN_WIDTH and 0 <= screen_y <= SCREEN_HEIGHT:
-                    pygame.draw.circle(self.screen, grid_color, (screen_x, screen_y), 2)
+                # Оптимизированная проверка видимости
+                if screen_left <= screen_x <= screen_right and screen_top <= screen_y <= screen_bottom:
+                    # Используем простые точки вместо кругов для лучшей производительности
+                    if 0 <= screen_x < SCREEN_WIDTH and 0 <= screen_y < SCREEN_HEIGHT:
+                        self.screen.set_at((int(screen_x), int(screen_y)), grid_color)
     
     def _draw_visible_enemies(self, location, camera_offset):
         """Отрисовка только видимых врагов (в зоне видимости игрока)"""
@@ -687,7 +850,9 @@ class Game:
         """Отрисовка тайловой карты уровня"""
         level = self.level_manager.get_current_level()
         if level:
-            level.draw(self.screen, camera_offset, self.iso_converter, self.fog_of_war)
+            player_x, player_y = self.player.get_position()
+            level.draw(self.screen, camera_offset, self.iso_converter, self.fog_of_war, 
+                      player_pos=(player_x, player_y))
     
     def _draw_ui(self, location):
         """Отрисовка UI"""
@@ -723,8 +888,11 @@ class Game:
         visible_tiles = self.fog_of_war.get_visible_for_minimap()
         
         # Отрисовка тайлов уровня (только исследованные)
+        # Оптимизация: ограничиваем количество тайлов для миникарты
         level = self.level_manager.get_current_level()
         if level and level.tiles:
+            # Предварительная фильтрация по расстоянию для производительности
+            tiles_for_minimap = []
             for (tx, ty), tile_data in level.tiles.items():
                 # Показываем только исследованные тайлы
                 if (tx, ty) not in explored_tiles:
@@ -734,10 +902,23 @@ class Game:
                 dx = tx - player_x
                 dy = ty - player_y
                 
-                # Проверяем расстояние для миникарты
-                distance = math.sqrt(dx * dx + dy * dy)
-                if distance > self.minimap_radius:
+                # Проверяем расстояние для миникарты (быстрая проверка без sqrt)
+                distance_sq = dx * dx + dy * dy
+                if distance_sq > self.minimap_radius * self.minimap_radius:
                     continue
+                
+                tiles_for_minimap.append(((tx, ty), tile_data, distance_sq))
+            
+            # Ограничиваем количество тайлов для миникарты (максимум 500)
+            if len(tiles_for_minimap) > 500:
+                tiles_for_minimap.sort(key=lambda item: item[2])  # Сортируем по расстоянию
+                tiles_for_minimap = tiles_for_minimap[:500]  # Берем ближайшие
+            
+            # Отрисовываем отфильтрованные тайлы
+            for (tx, ty), tile_data, _ in tiles_for_minimap:
+                # Позиция тайла относительно игрока
+                dx = tx - player_x
+                dy = ty - player_y
                 
                 # Изометрическое преобразование для миникарты
                 iso_x = (dx - dy) * tile_size // 2
@@ -898,7 +1079,12 @@ class Game:
                 prefix = "  "
                 suffix = "  "
             
-            text = self.font_medium.render(f"{prefix}{item['text']}{suffix}", True, color)
+            # Получаем текст пункта меню (может быть функцией)
+            menu_text = item['text']
+            if callable(menu_text):
+                menu_text = menu_text()
+            
+            text = self.font_medium.render(f"{prefix}{menu_text}{suffix}", True, color)
             text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, menu_y))
             self.screen.blit(text, text_rect)
             menu_y += 40

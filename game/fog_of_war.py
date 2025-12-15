@@ -14,11 +14,11 @@ class FogOfWar:
         self.screen_width = screen_width
         self.screen_height = screen_height
         
-        # Радиус видимости игрока (в мировых координатах)
-        self.vision_radius = 5.0  # Уменьшено для врагов
+        # Радиус видимости игрока для объектов (враги, предметы) - в мировых координатах
+        self.vision_radius = 12.0  # Увеличено для лучшей видимости врагов
         
-        # Радиус для исследования карты (больше чем видимость врагов)
-        self.exploration_radius = 6.0
+        # Радиус для исследования карты (для миникарты и статистики)
+        self.exploration_radius = 10.0
         
         # Исследованные тайлы
         self.explored_tiles = set()
