@@ -99,6 +99,10 @@ class Game:
         # Режим врагов (по умолчанию выключен)
         self.enemies_enabled = False
         
+        # Настройки спавна врагов (можно менять динамически)
+        self.enemy_spawn_frequency = 2.0  # Интервал проверки спавна в секундах (частота)
+        self.max_enemies = 12  # Максимальное количество врагов одновременно
+        
         # Кэш позиции для оптимизации обновления тайлов
         self.last_tile_update_pos = (0, 0)
         self.tile_update_threshold = 5.0  # Обновляем тайлы только при перемещении на 5+ тайлов
@@ -106,7 +110,11 @@ class Game:
         # Кэш для спавна врагов (не спавним каждый кадр)
         self.last_enemy_spawn_pos = (0, 0)
         self.enemy_spawn_cooldown = 0.0  # Кулдаун между проверками спавна
-        self.enemy_spawn_interval = 2.0  # Проверяем спавн раз в 2 секунды
+        self.enemy_spawn_interval = self.enemy_spawn_frequency  # Используем настройку частоты
+        
+        # Время показа настроек при включении врагов
+        self.enemy_settings_display_time = 0.0
+        self.enemy_settings_display_duration = 5.0  # Показывать 5 секунд
         
         # Меню паузы
         self.menu_items = [
@@ -292,6 +300,7 @@ class Game:
         self.game_over = False
         self.paused = False
         # Режим врагов остается как был (не сбрасываем)
+        # Настройки спавна остаются как были (не сбрасываем)
     
     def _resume_game(self):
         """Продолжить игру"""
@@ -313,12 +322,18 @@ class Game:
     
     def _toggle_enemy_mode(self):
         """Переключает режим врагов"""
+        was_enabled = self.enemies_enabled
         self.enemies_enabled = not self.enemies_enabled
         # Обновляем текст в меню
         self.menu_items[3]["text"] = self._get_enemy_mode_text
         # Если выключаем врагов, убиваем всех существующих
         if not self.enemies_enabled:
             self._kill_all_enemies()
+        # Если включаем врагов, показываем настройки
+        elif not was_enabled and self.enemies_enabled:
+            self.enemy_settings_display_time = self.enemy_settings_display_duration
+            # Обновляем интервал спавна
+            self.enemy_spawn_interval = self.enemy_spawn_frequency
     
     def _build_enemy_submenu(self):
         """Создаёт подменю с типами врагов"""
@@ -433,6 +448,8 @@ class Game:
         
         # Обновление процедурного спавна врагов (с кулдауном для производительности)
         self.enemy_spawn_cooldown -= dt
+        # Обновляем интервал спавна из настроек (на случай изменения)
+        self.enemy_spawn_interval = self.enemy_spawn_frequency
         if self.enemy_spawn_cooldown <= 0.0:
             # Проверяем, переместился ли игрок значительно
             dx = player_x - self.last_enemy_spawn_pos[0]
@@ -443,6 +460,31 @@ class Game:
                 self._update_procedural_enemy_spawn(current_location, player_x, player_y)
                 self.last_enemy_spawn_pos = (player_x, player_y)
                 self.enemy_spawn_cooldown = self.enemy_spawn_interval
+        
+        # Обновление времени показа настроек
+        if self.enemy_settings_display_time > 0.0:
+            self.enemy_settings_display_time -= dt
+        
+        # Обработка изменения настроек врагов (клавиши +/-)
+        if self.enemies_enabled:
+            if self.input_handler.is_key_just_pressed(pygame.K_EQUALS) or self.input_handler.is_key_just_pressed(pygame.K_PLUS):
+                # Увеличить частоту спавна (уменьшить интервал)
+                self.enemy_spawn_frequency = max(0.5, self.enemy_spawn_frequency - 0.5)
+                self.enemy_settings_display_time = self.enemy_settings_display_duration
+            elif self.input_handler.is_key_just_pressed(pygame.K_MINUS):
+                # Уменьшить частоту спавна (увеличить интервал)
+                self.enemy_spawn_frequency = min(10.0, self.enemy_spawn_frequency + 0.5)
+                self.enemy_settings_display_time = self.enemy_settings_display_duration
+            
+            # Изменение максимального количества врагов (клавиши [ и ])
+            if self.input_handler.is_key_just_pressed(pygame.K_RIGHTBRACKET):
+                # Увеличить максимальное количество
+                self.max_enemies = min(50, self.max_enemies + 2)
+                self.enemy_settings_display_time = self.enemy_settings_display_duration
+            elif self.input_handler.is_key_just_pressed(pygame.K_LEFTBRACKET):
+                # Уменьшить максимальное количество
+                self.max_enemies = max(2, self.max_enemies - 2)
+                self.enemy_settings_display_time = self.enemy_settings_display_duration
         
         # Обновление локации и получение атак врагов
         if current_location:
@@ -602,8 +644,8 @@ class Game:
         if not available_enemy_types:
             return
         
-        # Максимальное количество врагов (уменьшено)
-        max_enemies = 12
+        # Максимальное количество врагов (из настроек)
+        max_enemies = self.max_enemies
         
         # Спавним врагов на точках спавна
         for x, y, biome in spawn_points:
@@ -866,6 +908,10 @@ class Game:
         
         # Информация
         self._draw_info(location, player_x, player_y)
+        
+        # Настройки врагов (показываем при включении)
+        if self.enemies_enabled and self.enemy_settings_display_time > 0.0:
+            self._draw_enemy_settings()
     
     def _draw_minimap(self, location, player_x, player_y):
         """Отрисовка миникарты с туманом войны"""
@@ -1014,6 +1060,16 @@ class Game:
         self.screen.blit(location_text, (10, 60))
         self.screen.blit(mode_text, (10, 85))
         
+        # Настройки врагов (если включены)
+        if self.enemies_enabled:
+            current_location = self.location_manager.get_current_location()
+            current_enemies = len(current_location.enemies) if current_location else 0
+            enemy_settings_text = self.font_medium.render(
+                f"Враги: {current_enemies}/{self.max_enemies} (частота: {self.enemy_spawn_frequency:.1f}с)", 
+                True, (150, 255, 150)
+            )
+            self.screen.blit(enemy_settings_text, (10, 110))
+        
         # Управление
         controls = [
             "Управление:",
@@ -1023,11 +1079,23 @@ class Game:
             "Клавиши 1, 3-9 - способности",
             "ESC - меню"
         ]
-        y_offset = 110
+        y_offset = 135 if self.enemies_enabled else 110
         for text in controls:
             rendered = self.font_medium.render(text, True, GRAY)
             self.screen.blit(rendered, (10, y_offset))
             y_offset += 25
+        
+        # Управление настройками врагов (если включены)
+        if self.enemies_enabled:
+            enemy_controls = [
+                "Настройки врагов:",
+                "+/- - частота спавна",
+                "[/] - макс. количество"
+            ]
+            for text in enemy_controls:
+                rendered = self.font_medium.render(text, True, (150, 255, 150))
+                self.screen.blit(rendered, (10, y_offset))
+                y_offset += 25
     
     def _draw_game_over(self):
         """Отрисовка экрана Game Over"""
@@ -1193,6 +1261,61 @@ class Game:
         hint = self.font_small.render("W/S - выбор, Enter - спавн, ← или ESC - назад", True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
         self.screen.blit(hint, hint_rect)
+    
+    def _draw_enemy_settings(self):
+        """Отрисовка настроек спавна врагов (показывается при включении)"""
+        # Полупрозрачный фон
+        overlay = pygame.Surface((400, 180), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 200))
+        
+        settings_x = SCREEN_WIDTH // 2 - 200
+        settings_y = SCREEN_HEIGHT // 2 - 90
+        
+        self.screen.blit(overlay, (settings_x, settings_y))
+        
+        # Заголовок
+        title = self.font_medium.render("Настройки спавна врагов", True, (255, 255, 100))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, settings_y + 20))
+        self.screen.blit(title, title_rect)
+        
+        # Текущее количество врагов
+        current_location = self.location_manager.get_current_location()
+        current_enemies = len(current_location.enemies) if current_location else 0
+        
+        # Частота спавна
+        freq_text = self.font_small.render(
+            f"Частота спавна: {self.enemy_spawn_frequency:.1f} сек (+/- для изменения)", 
+            True, WHITE
+        )
+        freq_rect = freq_text.get_rect(center=(SCREEN_WIDTH // 2, settings_y + 55))
+        self.screen.blit(freq_text, freq_rect)
+        
+        # Максимальное количество
+        max_text = self.font_small.render(
+            f"Макс. врагов: {self.max_enemies} ([/] для изменения)", 
+            True, WHITE
+        )
+        max_rect = max_text.get_rect(center=(SCREEN_WIDTH // 2, settings_y + 80))
+        self.screen.blit(max_text, max_rect)
+        
+        # Текущее количество
+        current_text = self.font_small.render(
+            f"Текущее количество: {current_enemies}/{self.max_enemies}", 
+            True, (150, 255, 150)
+        )
+        current_rect = current_text.get_rect(center=(SCREEN_WIDTH // 2, settings_y + 105))
+        self.screen.blit(current_text, current_rect)
+        
+        # Подсказка
+        hint_text = self.font_small.render(
+            f"Настройки скроются через {int(self.enemy_settings_display_time) + 1} сек", 
+            True, GRAY
+        )
+        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, settings_y + 135))
+        self.screen.blit(hint_text, hint_rect)
+        
+        # Рамка
+        pygame.draw.rect(self.screen, (255, 255, 100), (settings_x, settings_y, 400, 180), 2)
 
 
 if __name__ == "__main__":
