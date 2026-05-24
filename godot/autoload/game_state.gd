@@ -71,4 +71,3 @@ func toggle_enemies() -> void:
 func reset_run_state() -> void:
 
 	set_game_over(false)
-
