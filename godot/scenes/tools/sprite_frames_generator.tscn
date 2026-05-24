@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://diabro_sprite_frames_gen"]
+
+[ext_resource type="Script" path="res://scripts/sprite_frames_generator.gd" id="1_gen"]
+
+[node name="SpriteFramesGenerator" type="Node"]
+script = ExtResource("1_gen")

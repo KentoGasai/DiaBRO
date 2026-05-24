@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3 uid="uid://diabro_main"]
+[gd_scene load_steps=6 format=3 uid="uid://diabro_main"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://diabro_world" path="res://scenes/world/world.tscn" id="2_world"]
 [ext_resource type="PackedScene" uid="uid://diabro_hud" path="res://scenes/ui/hud.tscn" id="3_hud"]
 [ext_resource type="PackedScene" uid="uid://diabro_pause" path="res://scenes/ui/pause_menu.tscn" id="4_pause"]
+[ext_resource type="PackedScene" uid="uid://diabro_loading" path="res://scenes/ui/loading_screen.tscn" id="5_loading"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -12,6 +13,9 @@ script = ExtResource("1_main")
 
 [node name="UI" type="CanvasLayer" parent="."]
 layer = 10
+
+[node name="LoadingScreen" parent="UI" instance=ExtResource("5_loading")]
+layer = 20
 
 [node name="HUD" parent="UI" instance=ExtResource("3_hud")]
 

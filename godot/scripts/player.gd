@@ -22,24 +22,32 @@ var is_attacking := false
 var invincibility_time := 0.0
 var damage_flash_time := 0.0
 
+## Перетащите `assets/sprites/frames/player.tres` сюда — правки в панели SpriteFrames Godot.
+@export var editor_sprite_frames: SpriteFrames
+
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
 
 func _ready() -> void:
-	_setup_sprites()
+	_ensure_sprite_frames()
 	if sprite:
 		sprite.animation_finished.connect(_on_attack_anim_done)
 
 
-func _setup_sprites() -> void:
-	var char_path := "res://assets/sprites/character/male_unarmored.png"
-	var weapon_path := "res://assets/sprites/weapon/male_longsword.png"
-	if ResourceLoader.exists(char_path):
-		var frames := SpriteSheetBuilder.build_frames(char_path, weapon_path, 1.0)
-		sprite.sprite_frames = frames
-		sprite.visible = true
-	else:
-		sprite.visible = false
+## В сцене можно назначить .tres вручную (панель SpriteFrames). Иначе — загрузка с диска / сборка из PNG.
+func _ensure_sprite_frames() -> void:
+	if not sprite:
+		return
+	if editor_sprite_frames != null and SpriteFramesPipeline.has_valid_frames(editor_sprite_frames):
+		sprite.sprite_frames = editor_sprite_frames
+	elif not SpriteFramesPipeline.has_valid_frames(sprite.sprite_frames):
+		sprite.sprite_frames = SpriteFramesPipeline.load_player_frames()
+	sprite.visible = SpriteFramesPipeline.has_valid_frames(sprite.sprite_frames)
+	if sprite.visible:
+		if sprite.animation.is_empty() or not sprite.sprite_frames.has_animation(sprite.animation):
+			sprite.animation = "walk_0"
+		sprite.stop()
+		sprite.frame = 0
 
 
 func update_player(delta: float) -> void:

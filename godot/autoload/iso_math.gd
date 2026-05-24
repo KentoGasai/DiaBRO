@@ -1,8 +1,9 @@
 extends Node
 ## Изометрические преобразования (как game/isometric.py + main.py WASD).
 
-const TILE_WIDTH := 128.0
-const TILE_HEIGHT := 64.0
+## Kenney isometric: ромб 256×128 (см. knowledge base Kenney).
+const TILE_WIDTH := 256.0
+const TILE_HEIGHT := 128.0
 
 const HALF_W := TILE_WIDTH / 2.0
 const HALF_H := TILE_HEIGHT / 2.0

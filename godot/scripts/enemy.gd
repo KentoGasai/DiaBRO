@@ -60,7 +60,7 @@ func _load_sprites(data: Dictionary) -> void:
 	var weapon: String = str(data.get("weapon_path", ""))
 	var scale := float(data.get("sprite_scale", 1.0))
 	if ResourceLoader.exists(path):
-		sprite.sprite_frames = SpriteSheetBuilder.build_frames(path, weapon, scale)
+		sprite.sprite_frames = SpriteFramesPipeline.load_enemy_frames(enemy_type_id, data)
 		sprite.visible = sprite.sprite_frames.has_animation("walk_0")
 		if sprite.visible:
 			var ft := sprite.sprite_frames.get_frame_texture("walk_0", 0)

@@ -5,6 +5,7 @@ extends Node
 @onready var hud: CanvasLayer = $UI/HUD
 @onready var pause_menu: Control = $UI/PauseMenu
 @onready var game_over_panel: Control = $UI/GameOverPanel
+@onready var loading_screen: Control = $UI/LoadingScreen
 
 
 func _ready() -> void:
@@ -12,6 +13,15 @@ func _ready() -> void:
 	GameState.game_over_changed.connect(_on_game_over_changed)
 	pause_menu.visible = false
 	game_over_panel.visible = false
+
+	world.visible = false
+	if loading_screen.has_method("run"):
+		await loading_screen.run(world, GameWorld.DEFAULT_LEVEL)
+	await world.begin_play()
+	world.visible = true
+	if loading_screen:
+		loading_screen.visible = false
+
 	hud.setup(world)
 
 

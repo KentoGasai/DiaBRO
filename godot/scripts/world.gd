@@ -8,6 +8,7 @@ const DEFAULT_LEVEL := "wilderness"
 
 @onready var camera_layer: Node2D = $CameraLayer
 @onready var tile_world: TileMapLayer = $CameraLayer/TileWorld
+@onready var world_props: Node2D = $CameraLayer/WorldProps
 @onready var entities: Node2D = $CameraLayer/Entities
 @onready var player: GamePlayer = $CameraLayer/Entities/Player
 @onready var combat: CombatManager = $CombatManager
@@ -28,14 +29,31 @@ func _ready() -> void:
 		cam.make_current()
 	player.died.connect(_on_player_died)
 	combat.attack_performed.connect(_on_attack_performed)
-	await _start_level(DEFAULT_LEVEL)
+	player.visible = false
 
 
-func _start_level(level_name: String) -> void:
+## Вызывается из GameBootstrap / loading_screen после сборки тайлмапа.
+func prepare_level(p_level: LevelController, on_progress: Callable = Callable()) -> void:
 	_level_loading = true
-	level = LevelController.new(level_name)
-	GameState.current_level_name = level_name
-	await tile_world.setup(level)
+	level = p_level
+	GameState.current_level_name = level.name
+	var tile_progress := func(ratio: float, message: String) -> void:
+		if on_progress.is_valid():
+			on_progress.call(ratio * 0.55, message)
+	await tile_world.setup(level, tile_progress)
+
+	var props_progress := func(ratio: float, message: String) -> void:
+		if on_progress.is_valid():
+			on_progress.call(0.55 + ratio * 0.45, message)
+	if world_props:
+		await world_props.setup(level, tile_world, props_progress)
+
+	_level_loading = false
+
+
+func begin_play() -> void:
+	if level == null:
+		return
 	player.world_position = level.get_spawn_position()
 	player.velocity = Vector2.ZERO
 	player.visible = true
@@ -45,8 +63,12 @@ func _start_level(level_name: String) -> void:
 	player._sync_position()
 	fog.reset()
 	_snap_camera_to_player()
-	_level_loading = false
 	queue_redraw()
+
+
+func _start_level(level_name: String) -> void:
+	await prepare_level(LevelController.new(level_name))
+	await begin_play()
 
 
 func _snap_camera_to_player() -> void:

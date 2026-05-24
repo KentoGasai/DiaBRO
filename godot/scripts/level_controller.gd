@@ -10,6 +10,7 @@ var height: int = 64
 var tiles: Dictionary = {}
 var spawn_points: Array = []
 var structures: Array = []
+var props: Array = []
 var player_spawn: Vector2 = Vector2(32, 32)
 var bounds_min: Vector2 = Vector2(0.5, 0.5)
 var bounds_max: Vector2 = Vector2(63.5, 63.5)
@@ -23,6 +24,7 @@ func load_level(level_name: String) -> bool:
 	tiles.clear()
 	spawn_points.clear()
 	structures.clear()
+	props.clear()
 	name = level_name
 
 	var path := LEVELS_DIR + level_name + ".json"
@@ -48,6 +50,7 @@ func load_level(level_name: String) -> bool:
 		var generated := LevelGenerator.generate_level(width, height, p_seed, preset)
 		tiles = generated.get("tiles", {})
 		spawn_points.append_array(generated.get("spawn_points", []))
+		props.append_array(generated.get("props", []))
 	else:
 		_load_tiles_from_json(data.get("tiles", {}))
 		_fill_missing_tiles()
@@ -84,7 +87,7 @@ func _load_tiles_from_json(raw: Variant) -> void:
 
 
 func _fill_missing_tiles() -> void:
-	var default_tile := {"tileset": "grass_green_128x64", "tile": 0}
+	var default_tile := KenneyTileCatalog.default_floor_tile()
 	for x in range(width):
 		for y in range(height):
 			var pos := Vector2i(x, y)

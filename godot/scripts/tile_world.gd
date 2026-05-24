@@ -1,28 +1,32 @@
 extends TileMapLayer
-## TileMapLayer — полная сборка уровня один раз при загрузке.
+## TileMapLayer — Kenney isometric tiles, сборка уровня при загрузке.
 
-const TEXTURES_DIR := "res://assets/sprites/textures/"
-const TILE_W := 128
-const TILE_H := 64
-const CELLS_PER_FRAME := 2000
+const CELLS_PER_FRAME := 400
 
 var level: LevelController
 var _tile_lookup: Dictionary = {}
 
 
 func _ready() -> void:
-	_build_tileset()
+	pass
 
 
-func setup(p_level: LevelController) -> void:
+func setup(p_level: LevelController, on_progress: Callable = Callable()) -> void:
 	level = p_level
-	await build_from_level()
+	await build_from_level(on_progress)
 
 
-func build_from_level() -> void:
+func build_from_level(on_progress: Callable = Callable()) -> void:
 	clear()
+	_tile_lookup.clear()
 	if level == null or level.tiles.is_empty():
+		_report(on_progress, 1.0, "Нет данных уровня")
 		return
+
+	_report(on_progress, 0.0, "Подготовка тайлсета Kenney...")
+	await get_tree().process_frame
+	_build_tileset_from_level()
+	await get_tree().process_frame
 
 	var order: Array = level.tiles.keys()
 	order.sort_custom(func(a, b):
@@ -33,21 +37,30 @@ func build_from_level() -> void:
 		return pa.x < pb.x
 	)
 
+	var total := order.size()
 	var placed := 0
 	var skipped := 0
-	for pos_variant in order:
-		var pos: Vector2i = pos_variant
+	for i in range(total):
+		var pos: Vector2i = order[i]
 		if _place_cell(pos, level.tiles[pos]):
 			placed += 1
 		else:
 			skipped += 1
-		if (placed + skipped) % CELLS_PER_FRAME == 0:
+		if (i + 1) % CELLS_PER_FRAME == 0 or i == total - 1:
+			var ratio := float(i + 1) / float(total)
+			_report(on_progress, ratio, "Сборка карты %d / %d" % [i + 1, total])
 			await get_tree().process_frame
 
 	if skipped > 0:
-		push_warning("TileWorld: не размещено тайлов: %d из %d" % [skipped, level.tiles.size()])
+		push_warning("TileWorld: не размещено тайлов: %d из %d" % [skipped, total])
 
 	_align_to_iso_space()
+	_report(on_progress, 1.0, "Готово")
+
+
+func _report(on_progress: Callable, ratio: float, message: String) -> void:
+	if on_progress.is_valid():
+		on_progress.call(ratio, message)
 
 
 func _align_to_iso_space() -> void:
@@ -58,7 +71,7 @@ func _align_to_iso_space() -> void:
 
 
 func _place_cell(pos: Vector2i, data: Dictionary) -> bool:
-	var key := _tile_key(data)
+	var key := KenneyTileCatalog.tile_key(data)
 	var info: Dictionary = _tile_lookup.get(key, {})
 	if info.is_empty():
 		return false
@@ -66,52 +79,52 @@ func _place_cell(pos: Vector2i, data: Dictionary) -> bool:
 	return true
 
 
-func _build_tileset() -> void:
-	_tile_lookup.clear()
+func _build_tileset_from_level() -> void:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
-	ts.tile_size = Vector2i(TILE_W, TILE_H)
-	# Линейная сетка без stagger — проще совместить с world_to_screen
+	ts.tile_size = KenneyTileCatalog.TILE_SIZE
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_RIGHT
 
-	var dir := DirAccess.open(TEXTURES_DIR)
-	if not dir:
-		push_warning("Textures dir missing: %s" % TEXTURES_DIR)
-		tile_set = ts
-		return
+	var keys: Dictionary = {}
+	for pos_variant in level.tiles:
+		var data: Dictionary = level.tiles[pos_variant]
+		var key := KenneyTileCatalog.tile_key(data)
+		if not key.is_empty():
+			keys[key] = data
 
-	dir.list_dir_begin()
-	var fn := dir.get_next()
 	var source_id := 0
-	while fn != "":
-		if fn.ends_with(".png"):
-			var tex_name := fn.get_basename()
-			var tex: Texture2D = load(TEXTURES_DIR + fn)
-			if tex != null:
-				var img := tex.get_image()
-				var cols: int = maxi(1, img.get_width() / TILE_W)
-				var rows: int = maxi(1, img.get_height() / TILE_H)
-				var atlas := TileSetAtlasSource.new()
-				atlas.texture = tex
-				atlas.texture_region_size = Vector2i(TILE_W, TILE_H)
-				for row in range(rows):
-					for col in range(cols):
-						var ac := Vector2i(col, row)
-						if not atlas.has_tile(ac):
-							atlas.create_tile(ac)
-						_tile_lookup["%s:%d" % [tex_name, row * cols + col]] = {
-							"source_id": source_id,
-							"atlas": ac,
-						}
-				ts.add_source(atlas, source_id)
-				source_id += 1
-		fn = dir.get_next()
-	dir.list_dir_end()
+	for key in keys:
+		var data: Dictionary = keys[key]
+		if _register_kenney_tile(ts, data, source_id):
+			source_id += 1
+
 	tile_set = ts
 
 
-func _tile_key(data: Dictionary) -> String:
-	var ts_name := str(data.get("tileset", ""))
-	if ts_name.is_empty():
-		return ""
-	return "%s:%d" % [ts_name, int(data.get("tile", 0))]
+func _register_kenney_tile(ts: TileSet, data: Dictionary, source_id: int) -> bool:
+	var pack := str(data.get("pack", ""))
+	var base := str(data.get("base", ""))
+	var facing := str(data.get("facing", "E"))
+	var path := KenneyTileCatalog.texture_path(pack, base, facing)
+	if not FileAccess.file_exists(path):
+		push_warning("Kenney tile missing: %s" % path)
+		return false
+
+	var tex: Texture2D = load(path) as Texture2D
+	if tex == null:
+		return false
+
+	var atlas := TileSetAtlasSource.new()
+	atlas.texture = tex
+	atlas.texture_region_size = KenneyTileCatalog.TEXTURE_SIZE
+	var ac := Vector2i.ZERO
+	if not atlas.has_tile(ac):
+		atlas.create_tile(ac)
+	var td := atlas.get_tile_data(ac, 0)
+	if td:
+		td.texture_origin = KenneyTileCatalog.TEXTURE_ORIGIN
+
+	ts.add_source(atlas, source_id)
+	var lookup_key := KenneyTileCatalog.tile_key(data)
+	_tile_lookup[lookup_key] = {"source_id": source_id, "atlas": ac}
+	return true

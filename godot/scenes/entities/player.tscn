@@ -1,13 +1,17 @@
-[gd_scene load_steps=2 format=3 uid="uid://diabro_player"]
+[gd_scene format=3 uid="uid://bxmev3cd2ff38"]
 
-[ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
+[ext_resource type="Script" uid="uid://ch1xr5u1qrjvk" path="res://scripts/player.gd" id="1_player"]
+[ext_resource type="SpriteFrames" uid="uid://vumj8kcy5bxj" path="res://assets/sprites/frames/player.tres" id="2_08t41"]
 
-[node name="Player" type="Node2D"]
-y_sort_enabled = true
+[node name="Player" type="Node2D" unique_id=593167970]
 physics_interpolation_mode = 1
+y_sort_enabled = true
 script = ExtResource("1_player")
+editor_sprite_frames = ExtResource("2_08t41")
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1228797622]
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1949367027]
+sprite_frames = ExtResource("2_08t41")
+animation = &"walk_0"
 centered = false

@@ -1,7 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://diabro_world"]
+[gd_scene load_steps=7 format=3 uid="uid://diabro_world"]
 
 [ext_resource type="Script" path="res://scripts/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/tile_world.gd" id="2_tile"]
+[ext_resource type="Script" path="res://scripts/world_props.gd" id="6_props"]
 [ext_resource type="Script" path="res://scripts/fog_of_war.gd" id="3_fog"]
 [ext_resource type="Script" path="res://scripts/combat_manager.gd" id="4_combat"]
 [ext_resource type="PackedScene" uid="uid://diabro_player" path="res://scenes/entities/player.tscn" id="5_player"]
@@ -14,6 +15,11 @@ script = ExtResource("1_world")
 [node name="TileWorld" type="TileMapLayer" parent="CameraLayer"]
 z_index = 0
 script = ExtResource("2_tile")
+
+[node name="WorldProps" type="Node2D" parent="CameraLayer"]
+z_index = 1
+y_sort_enabled = true
+script = ExtResource("6_props")
 
 [node name="Entities" type="Node2D" parent="CameraLayer"]
 z_index = 2
