@@ -1,21 +1,21 @@
 extends TileMapLayer
-## TileMapLayer + потоковая подгрузка (бюджет кадра), кэш чанков в ProceduralGenerator
+## TileMapLayer: синхронизация видимой зоны без «хвоста» от кадровой очереди.
+## Чанки кэшируются в ProceduralGenerator; на карте — гистерезис (не стираем сразу).
 
 const TEXTURES_DIR := "res://assets/sprites/textures/"
 const TILE_W := 128
 const TILE_H := 64
 
-const TILES_PER_FRAME := 120
-const TILES_PER_FRAME_URGENT := 280
-const RECOMPUTE_MOVE_SQ := 9.0  # ~3 тайла — чаще пересчёт, но без лагового пика
-const URGENT_QUEUE := 600
+const LOAD_MARGIN := 8.0
+const KEEP_EXTRA := 20.0
+const MAX_LOAD_RADIUS := 34.0
+const UPDATE_MOVE_SQ := 4.0
+const PREFETCH_DIST := 7.0
 
 var level: LevelController
 var _tile_lookup: Dictionary = {}
 var _active_cells: Dictionary = {}
-var _wanted_center := Vector2(INF, INF)
-var _pending_sets: Array = []
-var _pending_erases: Array[Vector2i] = []
+var _last_sync_center := Vector2(INF, INF)
 
 
 func _ready() -> void:
@@ -25,130 +25,118 @@ func _ready() -> void:
 func setup(p_level: LevelController) -> void:
 	level = p_level
 	reset_streaming()
-	var vp := get_viewport_rect().size
-	refresh_around(Vector2.ZERO, true, vp)
+	refresh_around(Vector2.ZERO, true, Vector2(1920, 1080))
 
 
 func reset_streaming() -> void:
 	clear()
 	_active_cells.clear()
-	_wanted_center = Vector2(INF, INF)
-	_pending_sets.clear()
-	_pending_erases.clear()
+	_last_sync_center = Vector2(INF, INF)
 
 
-func _process(_delta: float) -> void:
-	_apply_stream_budget()
-
-
-func refresh_around(center: Vector2, force: bool = false, screen_size: Vector2 = Vector2(1920, 1080)) -> void:
+func refresh_around(
+	center: Vector2,
+	force: bool = false,
+	screen_size: Vector2 = Vector2(1920, 1080),
+	velocity: Vector2 = Vector2.ZERO
+) -> void:
 	if level == null:
 		return
-	var load_radius: float = IsoMath.visible_tile_radius(screen_size)
+
+	var vis_r: float = IsoMath.visible_tile_radius(screen_size)
+	var load_r: float = minf(vis_r + LOAD_MARGIN, MAX_LOAD_RADIUS)
+	var keep_r: float = load_r + KEEP_EXTRA
+
+	var sample_center := center
+	if velocity.length_squared() > 0.5:
+		sample_center = center + velocity.normalized() * minf(velocity.length() * 0.4, PREFETCH_DIST)
+
 	if level.procedural:
-		level.update_procedural(center, force, load_radius)
+		level.update_procedural(sample_center, force, load_r)
 
-	var need_requeue := force
-	if not need_requeue:
-		need_requeue = center.distance_squared_to(_wanted_center) >= RECOMPUTE_MOVE_SQ
-	var queue_idle := _pending_sets.is_empty() and _pending_erases.is_empty()
-	if need_requeue or queue_idle:
-		_requeue_diff(center, screen_size, force)
+	if force or center.distance_squared_to(_last_sync_center) >= UPDATE_MOVE_SQ:
+		_last_sync_center = center
+		_sync_tiles(center, sample_center, load_r, keep_r, force)
 
 
-func _requeue_diff(center: Vector2, screen_size: Vector2, force: bool) -> void:
-	_wanted_center = center
-	if force:
-		_pending_sets.clear()
-		_pending_erases.clear()
+func _sync_tiles(center: Vector2, sample_center: Vector2, load_r: float, keep_r: float, force: bool) -> void:
+	var wanted := _build_wanted(sample_center, load_r, force)
+	var keep_sq: float = keep_r * keep_r
+	var load_sq: float = load_r * load_r
 
-	var load_radius: float = IsoMath.visible_tile_radius(screen_size)
-	var wanted := _collect_wanted(center, load_radius, force)
-
-	var erase_set: Dictionary = {}
-	for e: Vector2i in _pending_erases:
-		erase_set[e] = true
-	var set_pos: Dictionary = {}
-	for item: Dictionary in _pending_sets:
-		set_pos[item["pos"]] = true
-
+	var to_erase: Array[Vector2i] = []
 	for cell: Vector2i in _active_cells:
-		if not wanted.has(cell) and not erase_set.has(cell):
-			_pending_erases.append(cell)
-			erase_set[cell] = true
+		var dx: float = float(cell.x) - center.x
+		var dy: float = float(cell.y) - center.y
+		if dx * dx + dy * dy > keep_sq:
+			to_erase.append(cell)
+	for cell in to_erase:
+		erase_cell(cell)
+		_active_cells.erase(cell)
 
+	var to_place: Array = []
 	for pos_variant in wanted:
 		var pos: Vector2i = pos_variant
+		var dx: float = float(pos.x) - center.x
+		var dy: float = float(pos.y) - center.y
+		var d2: float = dx * dx + dy * dy
+		if d2 > load_sq:
+			continue
 		var data: Dictionary = wanted[pos]
 		var key := _tile_key(data)
 		if key.is_empty():
 			continue
 		if _active_cells.get(pos) == key:
 			continue
-		if set_pos.has(pos):
-			continue
-		_pending_sets.append({"pos": pos, "data": data})
-		set_pos[pos] = true
+		to_place.append({"pos": pos, "data": data, "d2": d2})
+
+	to_place.sort_custom(func(a, b): return a["d2"] < b["d2"])
+	for item in to_place:
+		_place_cell(item["pos"], item["data"])
 
 
-
-func _collect_wanted(center: Vector2, load_radius: float, force: bool) -> Dictionary:
+func _build_wanted(sample_center: Vector2, load_r: float, force: bool) -> Dictionary:
 	var wanted: Dictionary = {}
-	var radius_sq: float = load_radius * load_radius
+	var radius_sq: float = load_r * load_r
 
 	if level.procedural and level.procedural_generator:
 		if force or level.tiles.is_empty():
-			var generated := level.procedural_generator.get_tiles_in_radius(
-				center.x, center.y, load_radius
-			)
-			for pos in generated:
-				level.tiles[pos] = generated[pos]
-
-	for pos_variant in level.tiles:
-		var pos: Vector2i = pos_variant
-		var dx: float = pos.x - center.x
-		var dy: float = pos.y - center.y
-		if dx * dx + dy * dy <= radius_sq:
-			wanted[pos] = level.tiles[pos]
-
-	# Край экрана: в кэше мало тайлов — догружаем чанки в level.tiles
-	if level.procedural and level.procedural_generator:
-		var expected_min := int(radius_sq * 0.12)
-		if wanted.size() < expected_min:
-			level.update_procedural(center, true, load_radius)
-			for pos_variant in level.tiles:
-				var pos: Vector2i = pos_variant
-				var dx: float = pos.x - center.x
-				var dy: float = pos.y - center.y
-				if dx * dx + dy * dy <= radius_sq:
-					wanted[pos] = level.tiles[pos]
+			_merge_generated(sample_center, load_r, wanted)
+		else:
+			_fill_from_level_cache(sample_center, radius_sq, wanted)
+			if wanted.size() < int(radius_sq * 0.2):
+				_merge_generated(sample_center, load_r, wanted)
+	else:
+		_fill_from_level_cache(sample_center, radius_sq, wanted)
 
 	return wanted
 
 
-func _apply_stream_budget() -> void:
-	var queue_size := _pending_sets.size() + _pending_erases.size()
-	var budget := TILES_PER_FRAME_URGENT if queue_size > URGENT_QUEUE else TILES_PER_FRAME
+func _fill_from_level_cache(sample_center: Vector2, radius_sq: float, wanted: Dictionary) -> void:
+	for pos_variant in level.tiles:
+		var pos: Vector2i = pos_variant
+		var dx: float = pos.x - sample_center.x
+		var dy: float = pos.y - sample_center.y
+		if dx * dx + dy * dy <= radius_sq:
+			wanted[pos] = level.tiles[pos]
 
-	while budget > 0 and not _pending_erases.is_empty():
-		var cell: Vector2i = _pending_erases.pop_back()
-		if _active_cells.has(cell):
-			erase_cell(cell)
-			_active_cells.erase(cell)
-		budget -= 1
 
-	while budget > 0 and not _pending_sets.is_empty():
-		var item: Dictionary = _pending_sets.pop_back()
-		var pos: Vector2i = item["pos"]
-		var data: Dictionary = item["data"]
-		var key := _tile_key(data)
-		var info: Dictionary = _tile_lookup.get(key, {})
-		if info.is_empty():
-			budget -= 1
-			continue
-		set_cell(pos, int(info["source_id"]), info["atlas"] as Vector2i)
-		_active_cells[pos] = key
-		budget -= 1
+func _merge_generated(sample_center: Vector2, load_r: float, wanted: Dictionary) -> void:
+	var generated: Dictionary = level.procedural_generator.get_tiles_in_radius(
+		sample_center.x, sample_center.y, load_r
+	)
+	for pos in generated:
+		level.tiles[pos] = generated[pos]
+		wanted[pos] = generated[pos]
+
+
+func _place_cell(pos: Vector2i, data: Dictionary) -> void:
+	var key := _tile_key(data)
+	var info: Dictionary = _tile_lookup.get(key, {})
+	if info.is_empty():
+		return
+	set_cell(pos, int(info["source_id"]), info["atlas"] as Vector2i)
+	_active_cells[pos] = key
 
 
 func _build_tileset() -> void:

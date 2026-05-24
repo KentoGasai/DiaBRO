@@ -5,8 +5,8 @@ extends RefCounted
 const LEVELS_DIR := "res://data/levels/"
 const TILE_W := 128
 const TILE_H := 64
-const MAX_CACHED_TILES := 2500
-const PROC_LOAD_RADIUS := 20.0  # fallback; обычно берётся из IsoMath.visible_tile_radius
+const MAX_CACHED_TILES := 1800
+const PROC_LOAD_RADIUS := 22.0
 
 var name: String = "procedural"
 var procedural: bool = true
@@ -64,7 +64,7 @@ func update_procedural(center: Vector2, force: bool = false, load_radius: float 
 	if not procedural or procedural_generator == null:
 		return
 	if not force:
-		if center.distance_squared_to(_last_update_pos) < 9.0:
+		if center.distance_squared_to(_last_update_pos) < 4.0:
 			return
 	_last_update_pos = center
 	var radius: float = load_radius if load_radius > 0.0 else PROC_LOAD_RADIUS
@@ -74,18 +74,25 @@ func update_procedural(center: Vector2, force: bool = false, load_radius: float 
 	for pos in new_tiles:
 		tiles[pos] = new_tiles[pos]
 	if tiles.size() > MAX_CACHED_TILES:
-		_trim_tiles(center)
-	procedural_generator.trim_chunks(center, 14)
+		_trim_tiles(center, radius + 18.0)
+	procedural_generator.trim_chunks(center, 22)
 
 
-func _trim_tiles(center: Vector2) -> void:
+func _trim_tiles(center: Vector2, keep_radius: float) -> void:
+	var keep_sq: float = keep_radius * keep_radius
 	var sorted: Array = []
 	for pos: Vector2i in tiles:
-		var d2 := (Vector2(pos) - center).length_squared()
+		var dx: float = pos.x - center.x
+		var dy: float = pos.y - center.y
+		var d2: float = dx * dx + dy * dy
+		if d2 <= keep_sq:
+			continue
 		sorted.append({"pos": pos, "d2": d2})
+	if sorted.is_empty():
+		return
 	sorted.sort_custom(func(a, b): return a["d2"] > b["d2"])
-	var remove_n := tiles.size() - MAX_CACHED_TILES
-	for i in range(remove_n):
+	var remove_n: int = tiles.size() - MAX_CACHED_TILES
+	for i in range(mini(remove_n, sorted.size())):
 		tiles.erase(sorted[i]["pos"])
 
 

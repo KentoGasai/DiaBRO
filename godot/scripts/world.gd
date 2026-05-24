@@ -17,7 +17,7 @@ const BG_COLOR := Color(0.12, 0.16, 0.2)
 var level := LevelController.new("procedural")
 var camera_offset := Vector2.ZERO
 var camera_target := Vector2.ZERO
-const CAMERA_SMOOTH := 0.1
+const CAMERA_SMOOTH := 0.18
 
 var _enemy_spawn_cooldown := 0.0
 var _last_spawn_pos := Vector2.ZERO
@@ -41,7 +41,9 @@ func _process(delta: float) -> void:
 	camera_layer.position = camera_offset
 	player.update_player(delta, Vector2.ZERO)
 	fog.update_fog(player.world_position, delta)
-	tile_world.refresh_around(player.world_position, false, get_viewport_rect().size)
+	tile_world.refresh_around(
+		player.world_position, false, get_viewport_rect().size, player.velocity
+	)
 
 	_update_enemy_highlight()
 	_handle_combat_input()

@@ -133,7 +133,9 @@ func get_tiles_in_radius(cx: float, cy: float, radius: float) -> Dictionary:
 	return out
 
 
-func trim_chunks(center: Vector2, max_chunk_radius: int = 14) -> void:
+func trim_chunks(center: Vector2, max_chunk_radius: int = 22) -> void:
+	if _chunks.size() < 96:
+		return
 	var pc := _world_to_chunk(center.x, center.y)
 	var to_erase: Array[Vector2i] = []
 	for key: Vector2i in _chunks:
