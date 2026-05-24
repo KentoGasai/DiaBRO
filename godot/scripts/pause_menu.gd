@@ -158,7 +158,7 @@ func _confirm() -> void:
 				_mode = MenuMode.MAIN
 				_update_display()
 			elif item.has("name"):
-				_world.load_level(item["name"])
+				await _world.load_level(item["name"])
 				GameState.set_paused(false)
 		MenuMode.ENEMIES:
 			var item: Dictionary = _enemy_items[_selected_sub]
@@ -207,7 +207,7 @@ func _execute_main(item: Dictionary) -> void:
 			_world.kill_all_enemies()
 		"restart":
 			GameState.set_paused(false)
-			_world.restart_run()
+			await _world.restart_run()
 		"quit":
 			get_tree().quit()
 

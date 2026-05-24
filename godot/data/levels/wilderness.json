@@ -1,0 +1,14 @@
+{
+  "name": "wilderness",
+  "width": 64,
+  "height": 64,
+  "source": "generator",
+  "generator": {
+    "seed": 0,
+    "preset": "overworld"
+  },
+  "player_spawn": [32, 32],
+  "spawn_points": [],
+  "structures": [],
+  "tiles": {}
+}

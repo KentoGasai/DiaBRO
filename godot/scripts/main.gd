@@ -24,7 +24,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 	if GameState.game_over and event.is_action_pressed("restart"):
-		world.restart_run()
+		await world.restart_run()
 		game_over_panel.visible = false
 		get_viewport().set_input_as_handled()
 

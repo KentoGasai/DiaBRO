@@ -1,14 +1,11 @@
 extends Node2D
 class_name FogOfWar
-## Туман войны — перерисовка при смене тайла; обрезка explored по дистанции
+## Туман войны на фиксированной карте.
 
 const VISION_RADIUS := 12.0
 const EXPLORATION_RADIUS := 10.0
 const TILE_W := 128.0
 const TILE_H := 64.0
-const EXPLORED_KEEP_RADIUS := 100.0
-const EXPLORED_PRUNE_INTERVAL := 2.5
-const EXPLORED_MAX := 6000
 
 var explored_tiles: Dictionary = {}
 var visible_tiles: Dictionary = {}
@@ -16,7 +13,6 @@ var last_player_pos: Vector2 = Vector2.ZERO
 var camera_offset: Vector2 = Vector2.ZERO
 
 var _last_fog_tile := Vector2i(-999999, -999999)
-var _prune_timer := 0.0
 
 
 func reset() -> void:
@@ -24,7 +20,6 @@ func reset() -> void:
 	visible_tiles.clear()
 	last_player_pos = Vector2.ZERO
 	_last_fog_tile = Vector2i(-999999, -999999)
-	_prune_timer = 0.0
 	queue_redraw()
 
 
@@ -33,7 +28,7 @@ func _draw() -> void:
 	draw_fog_overlay(vp, camera_offset)
 
 
-func update_fog(player_pos: Vector2, delta: float = 0.0) -> void:
+func update_fog(player_pos: Vector2, _delta: float = 0.0) -> void:
 	visible_tiles.clear()
 	last_player_pos = player_pos
 	var ri := int(EXPLORATION_RADIUS) + 1
@@ -54,26 +49,6 @@ func update_fog(player_pos: Vector2, delta: float = 0.0) -> void:
 	if tile_pos != _last_fog_tile:
 		_last_fog_tile = tile_pos
 		queue_redraw()
-
-	_prune_timer += delta
-	if _prune_timer >= EXPLORED_PRUNE_INTERVAL or explored_tiles.size() > EXPLORED_MAX:
-		_prune_timer = 0.0
-		_prune_explored(player_pos)
-
-
-func _prune_explored(center: Vector2) -> void:
-	if explored_tiles.size() <= 400:
-		return
-	var keep_sq := EXPLORED_KEEP_RADIUS * EXPLORED_KEEP_RADIUS
-	var to_erase: Array[Vector2i] = []
-	for key_variant in explored_tiles:
-		var key: Vector2i = key_variant
-		var dx := float(key.x) - center.x
-		var dy := float(key.y) - center.y
-		if dx * dx + dy * dy > keep_sq:
-			to_erase.append(key)
-	for key in to_erase:
-		explored_tiles.erase(key)
 
 
 func is_position_visible(world_pos: Vector2) -> bool:

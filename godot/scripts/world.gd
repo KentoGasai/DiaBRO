@@ -1,9 +1,10 @@
 extends Node2D
 class_name GameWorld
-## Игровой мир — логика из main.py Game
+## Игровой мир — фиксированные уровни, без потоковой подгрузки тайлов.
 
 const SCREEN_SIZE := Vector2(1920, 1080)
 const BG_COLOR := Color(0.12, 0.16, 0.2)
+const DEFAULT_LEVEL := "wilderness"
 
 @onready var camera_layer: Node2D = $CameraLayer
 @onready var tile_world: TileMapLayer = $CameraLayer/TileWorld
@@ -14,36 +15,44 @@ const BG_COLOR := Color(0.12, 0.16, 0.2)
 @onready var enemy_projectiles: Node2D = $CameraLayer/EnemyProjectiles
 @onready var fog: FogOfWar = $CameraLayer/FogOfWar
 
-var level := LevelController.new("procedural")
+var level := LevelController.new(DEFAULT_LEVEL)
 var camera_offset := Vector2.ZERO
 var camera_target := Vector2.ZERO
 const CAMERA_SMOOTH := 0.18
 
 var _enemy_spawn_cooldown := 0.0
 var _last_spawn_pos := Vector2.ZERO
-var _attack_pressed_prev := false
-var _ability_prev: Dictionary = {}
+var _level_loading := false
 
 
 func _ready() -> void:
-	GameState.current_level_name = "procedural"
-	tile_world.setup(level)
 	player.died.connect(_on_player_died)
 	combat.attack_performed.connect(_on_attack_performed)
-	_refresh_background()
+	await _start_level(DEFAULT_LEVEL)
+
+
+func _start_level(level_name: String) -> void:
+	_level_loading = true
+	level = LevelController.new(level_name)
+	GameState.current_level_name = level_name
+	await tile_world.setup(level)
+	player.world_position = level.player_spawn
+	player.velocity = Vector2.ZERO
+	fog.reset()
+	_level_loading = false
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
-	if GameState.paused or GameState.game_over:
+	if GameState.paused or GameState.game_over or _level_loading:
 		return
 
 	_update_camera(delta)
 	camera_layer.position = camera_offset
 	player.update_player(delta, Vector2.ZERO)
+	player.world_position = level.clamp_world_pos(player.world_position)
+
 	fog.update_fog(player.world_position, delta)
-	tile_world.refresh_around(
-		player.world_position, false, get_viewport_rect().size, player.velocity
-	)
 
 	_update_enemy_highlight()
 	_handle_combat_input()
@@ -144,8 +153,6 @@ func _update_enemy_highlight() -> void:
 func _process_enemy_spawn(delta: float) -> void:
 	if not GameState.enemies_enabled:
 		return
-	if level.procedural_generator == null:
-		return
 	_enemy_spawn_cooldown -= delta
 	if _enemy_spawn_cooldown > 0.0:
 		return
@@ -153,9 +160,7 @@ func _process_enemy_spawn(delta: float) -> void:
 	if pp.distance_squared_to(_last_spawn_pos) < 100.0:
 		return
 	var existing := get_enemies()
-	EnemySpawner.procedural_spawn(
-		entities, pp, existing, level.procedural_generator, GameState.max_enemies
-	)
+	EnemySpawner.spawn_from_level(entities, level, pp, existing, GameState.max_enemies)
 	_last_spawn_pos = pp
 	_enemy_spawn_cooldown = GameState.enemy_spawn_frequency
 
@@ -165,7 +170,8 @@ func _physics_process(delta: float) -> void:
 
 
 func spawn_enemy_type(type_id: String, count: int = 1) -> void:
-	EnemySpawner.spawn_ring(entities, player.world_position, count, type_id)
+	var center := level.clamp_world_pos(player.world_position)
+	EnemySpawner.spawn_ring(entities, center, count, type_id)
 
 
 func kill_all_enemies() -> void:
@@ -175,21 +181,14 @@ func kill_all_enemies() -> void:
 
 
 func load_level(level_name: String) -> bool:
-	if level_name != "procedural":
-		var path := LevelController.LEVELS_DIR + level_name + ".json"
-		if not FileAccess.file_exists(path):
-			return false
-	level = LevelController.new(level_name)
-	GameState.current_level_name = level_name
-	tile_world.setup(level)
-	tile_world.refresh_around(player.world_position, true, get_viewport_rect().size)
-	fog.reset()
+	var path := LevelController.LEVELS_DIR + level_name + ".json"
+	if not FileAccess.file_exists(path):
+		return false
+	await _start_level(level_name)
 	return true
 
 
 func restart_run() -> void:
-	player.world_position = Vector2.ZERO
-	player.velocity = Vector2.ZERO
 	player.health = player.MAX_HEALTH
 	player.mana = player.MAX_MANA
 	player.invincibility_time = 0.0
@@ -201,30 +200,42 @@ func restart_run() -> void:
 	camera_target = Vector2.ZERO
 	camera_layer.position = Vector2.ZERO
 
-	level = LevelController.new("procedural")
-	GameState.current_level_name = "procedural"
-	tile_world.setup(level)
-	tile_world.refresh_around(Vector2.ZERO, true, get_viewport_rect().size)
-
 	kill_all_enemies()
 	for c in projectiles.get_children():
 		c.queue_free()
 	for c in enemy_projectiles.get_children():
 		c.queue_free()
 
-	fog.reset()
 	_enemy_spawn_cooldown = 0.0
 	_last_spawn_pos = Vector2.ZERO
 	GameState.reset_run_state()
+	await _start_level(DEFAULT_LEVEL)
 
 
 func _on_player_died() -> void:
 	GameState.set_game_over(true)
 
 
-func _refresh_background() -> void:
-	pass
+func _level_screen_rect() -> Rect2:
+	var w := float(level.width)
+	var h := float(level.height)
+	var corners: Array[Vector2] = [
+		IsoMath.world_to_screen(0.0, 0.0),
+		IsoMath.world_to_screen(w, 0.0),
+		IsoMath.world_to_screen(0.0, h),
+		IsoMath.world_to_screen(w, h),
+	]
+	var mn := corners[0]
+	var mx := corners[0]
+	for p: Vector2 in corners:
+		mn.x = minf(mn.x, p.x)
+		mn.y = minf(mn.y, p.y)
+		mx.x = maxf(mx.x, p.x)
+		mx.y = maxf(mx.y, p.y)
+	return Rect2(mn, mx - mn).grow(400.0)
 
 
 func _draw() -> void:
-	draw_rect(Rect2(-10000, -10000, 20000, 20000), BG_COLOR)
+	if level == null:
+		return
+	draw_rect(_level_screen_rect(), BG_COLOR)

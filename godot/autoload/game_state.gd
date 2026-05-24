@@ -24,7 +24,7 @@ var max_enemies := 12
 
 
 
-var current_level_name := "procedural"
+var current_level_name := "wilderness"
 
 
 
