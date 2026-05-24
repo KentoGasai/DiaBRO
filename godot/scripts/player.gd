@@ -42,7 +42,7 @@ func _setup_sprites() -> void:
 		sprite.visible = false
 
 
-func update_player(delta: float, camera_offset: Vector2) -> void:
+func update_player(delta: float) -> void:
 	if invincibility_time > 0.0:
 		invincibility_time -= delta
 	if damage_flash_time > 0.0:
@@ -60,7 +60,7 @@ func update_player(delta: float, camera_offset: Vector2) -> void:
 	_apply_velocity(delta, target_vel)
 	world_position += velocity * delta
 	_update_animation(delta)
-	_sync_position(camera_offset)
+	_sync_position()
 	queue_redraw()
 
 
@@ -112,6 +112,7 @@ func play_attack_animation(is_melee: bool, target_world: Vector2) -> void:
 	var wdir := target_world - world_position
 	if wdir.length_squared() > 0.0001:
 		attack_sprite_angle = IsoMath.world_direction_to_sprite_angle(wdir)
+		sprite_angle = attack_sprite_angle
 	else:
 		attack_sprite_angle = sprite_angle
 	is_attacking = true
@@ -148,8 +149,8 @@ func is_dead() -> bool:
 	return health <= 0
 
 
-func _sync_position(camera_offset: Vector2) -> void:
-	position = IsoMath.world_to_screen(world_position.x, world_position.y) + camera_offset
+func _sync_position() -> void:
+	position = IsoMath.world_to_screen(world_position.x, world_position.y)
 	if sprite:
 		var blink_off := invincibility_time > 0.0 and int(invincibility_time * 10) % 2 == 0
 		sprite.visible = not blink_off

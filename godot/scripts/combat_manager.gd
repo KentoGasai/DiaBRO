@@ -39,19 +39,24 @@ func try_attack(
 	if attack_cooldown > 0.0:
 		return false
 
-	var angle: float = (target_world - player_pos).angle()
+	var wdir := target_world - player_pos
+	if wdir.length_squared() < 0.0001:
+		return false
+
+	var screen_angle := IsoMath.world_direction_to_sprite_angle(wdir)
+	var world_dir := wdir.normalized()
+
 	if is_melee_mode:
 		var damage: int = randi_range(5, 9)
 		for e: GameEnemy in enemies:
 			if not is_instance_valid(e) or e.is_dead or e.dying:
 				continue
-			var ep: Vector2 = e.world_position
-			if player_pos.distance_to(ep) <= MELEE_RANGE:
+			if player_pos.distance_to(e.world_position) <= MELEE_RANGE:
 				e.take_damage(damage)
-		_spawn_melee_vfx(player_pos, angle, projectiles_parent)
+		_spawn_melee_vfx(player_pos, screen_angle, projectiles_parent)
 	else:
 		var damage: int = randi_range(1, 5)
-		_spawn_projectile(player_pos, angle, damage, enemies, projectiles_parent)
+		_spawn_projectile(player_pos, world_dir, damage, enemies, projectiles_parent)
 
 	attack_cooldown = MELEE_COOLDOWN
 	attack_performed.emit(is_melee_mode, target_world)
@@ -60,7 +65,7 @@ func try_attack(
 
 func _spawn_projectile(
 	start: Vector2,
-	angle: float,
+	world_dir: Vector2,
 	damage: int,
 	enemies: Array[GameEnemy],
 	parent: Node
@@ -69,12 +74,12 @@ func _spawn_projectile(
 		return
 	var p = _projectile_scene.instantiate()
 	parent.add_child(p)
-	p.setup(start, angle, damage, RANGED_SPEED, RANGED_RANGE, enemies)
+	p.setup(start, world_dir, damage, RANGED_SPEED, RANGED_RANGE, enemies)
 
 
-func _spawn_melee_vfx(pos: Vector2, angle: float, parent: Node) -> void:
+func _spawn_melee_vfx(pos: Vector2, screen_angle: float, parent: Node) -> void:
 	if _melee_vfx_scene == null:
 		return
 	var v = _melee_vfx_scene.instantiate()
 	parent.add_child(v)
-	v.setup(pos, angle, MELEE_RANGE)
+	v.setup(pos, screen_angle, MELEE_RANGE)

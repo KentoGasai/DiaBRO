@@ -4,7 +4,10 @@
 
 [node name="Player" type="Node2D"]
 y_sort_enabled = true
+physics_interpolation_mode = 1
 script = ExtResource("1_player")
+
+[node name="Camera2D" type="Camera2D" parent="."]
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 centered = false

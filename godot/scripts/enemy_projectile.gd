@@ -18,12 +18,12 @@ func setup(start: Vector2, target: Vector2, p_damage: int, player: GamePlayer) -
 	_age = 0.0
 
 
-func update_projectile(delta: float, camera_offset: Vector2) -> bool:
+func update_projectile(delta: float) -> bool:
 	_age += delta
 	var move := velocity * delta
 	world_position += move
 	distance_traveled += move.length()
-	position = IsoMath.world_to_screen(world_position.x, world_position.y) + camera_offset
+	position = IsoMath.world_to_screen(world_position.x, world_position.y)
 	if distance_traveled >= max_range:
 		return true
 	if _player and is_instance_valid(_player):

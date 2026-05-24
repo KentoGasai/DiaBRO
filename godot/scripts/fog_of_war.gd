@@ -1,38 +1,45 @@
-extends Node2D
+extends CanvasLayer
 class_name FogOfWar
-## Туман войны на фиксированной карте.
+## Туман: TextureRect + GradientTexture2D (встроенный Godot), без шейдера.
+## Логика тайлов — для миникарты и видимости врагов.
 
 const VISION_RADIUS := 12.0
 const EXPLORATION_RADIUS := 10.0
-const TILE_W := 128.0
-const TILE_H := 64.0
 
 var explored_tiles: Dictionary = {}
 var visible_tiles: Dictionary = {}
 var last_player_pos: Vector2 = Vector2.ZERO
-var camera_offset: Vector2 = Vector2.ZERO
 
-var _last_fog_tile := Vector2i(-999999, -999999)
+@onready var _overlay: TextureRect = $Overlay
+
+
+func _ready() -> void:
+	layer = 0
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_overlay.stretch_mode = TextureRect.STRETCH_SCALE
+	_overlay.texture = _build_fog_gradient()
+
+
+func _build_fog_gradient() -> GradientTexture2D:
+	var grad := Gradient.new()
+	grad.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 0.75)])
+	grad.offsets = PackedFloat32Array([0.0, 0.42, 1.0])
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.width = 512
+	tex.height = 512
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	return tex
 
 
 func reset() -> void:
 	explored_tiles.clear()
 	visible_tiles.clear()
 	last_player_pos = Vector2.ZERO
-	_last_fog_tile = Vector2i(-999999, -999999)
-	queue_redraw()
-
-
-func _get_tile_map() -> TileMapLayer:
-	var p := get_parent()
-	if p:
-		return p.get_node_or_null("TileWorld") as TileMapLayer
-	return null
-
-
-func _draw() -> void:
-	var vp := get_viewport_rect().size
-	draw_fog_overlay(vp)
 
 
 func update_fog(player_pos: Vector2, _delta: float = 0.0) -> void:
@@ -52,11 +59,6 @@ func update_fog(player_pos: Vector2, _delta: float = 0.0) -> void:
 				visible_tiles[key] = true
 				explored_tiles[key] = true
 
-	var tile_pos := Vector2i(px, py)
-	if tile_pos != _last_fog_tile:
-		_last_fog_tile = tile_pos
-		queue_redraw()
-
 
 func is_position_visible(world_pos: Vector2) -> bool:
 	if last_player_pos == Vector2.ZERO and visible_tiles.is_empty():
@@ -66,40 +68,3 @@ func is_position_visible(world_pos: Vector2) -> bool:
 
 func is_tile_visible(tx: int, ty: int) -> bool:
 	return visible_tiles.has(Vector2i(tx, ty))
-
-
-func draw_fog_overlay(screen_size: Vector2) -> void:
-	if visible_tiles.is_empty():
-		return
-	var tile_map := _get_tile_map()
-	var half_w := TILE_W / 2.0
-	var half_h := TILE_H / 2.0
-	var vis_r: float = IsoMath.visible_tile_radius(screen_size)
-	var vis_r_sq: float = vis_r * vis_r
-	var px := int(last_player_pos.x)
-	var py := int(last_player_pos.y)
-	var ri := int(vis_r) + 2
-	for dx in range(-ri, ri + 1):
-		for dy in range(-ri, ri + 1):
-			if float(dx * dx + dy * dy) > vis_r_sq:
-				continue
-			var tx := px + dx
-			var ty := py + dy
-			var key := Vector2i(tx, ty)
-			if visible_tiles.has(key):
-				continue
-			var top := IsoMath.tile_cell_top_local(tile_map, tx, ty)
-			var screen_x: float = top.x
-			var screen_y: float = top.y
-			if screen_x < -TILE_W * 2 or screen_x > screen_size.x + TILE_W * 2:
-				continue
-			if screen_y < -TILE_H * 2 or screen_y > screen_size.y + TILE_H * 2:
-				continue
-			var alpha: int = 140 if explored_tiles.has(key) else 200
-			var points := PackedVector2Array([
-				Vector2(screen_x, screen_y - half_h),
-				Vector2(screen_x + half_w, screen_y),
-				Vector2(screen_x, screen_y + half_h),
-				Vector2(screen_x - half_w, screen_y),
-			])
-			draw_colored_polygon(points, Color(0, 0, 0, alpha / 255.0))

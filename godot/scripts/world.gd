@@ -1,6 +1,6 @@
 extends Node2D
 class_name GameWorld
-## Игровой мир — фиксированные уровни, без потоковой подгрузки тайлов.
+## Игровой мир — фиксированные уровни, Camera2D следует за игроком.
 
 const SCREEN_SIZE := Vector2(1920, 1080)
 const BG_COLOR := Color(0.12, 0.16, 0.2)
@@ -13,19 +13,19 @@ const DEFAULT_LEVEL := "wilderness"
 @onready var combat: CombatManager = $CombatManager
 @onready var projectiles: Node2D = $CameraLayer/Projectiles
 @onready var enemy_projectiles: Node2D = $CameraLayer/EnemyProjectiles
-@onready var fog: FogOfWar = $CameraLayer/FogOfWar
+@onready var fog: FogOfWar = $FogOfWar
 
 var level: LevelController
-var camera_offset := Vector2.ZERO
-var camera_target := Vector2.ZERO
-const CAMERA_SMOOTH := 0.18
-
 var _enemy_spawn_cooldown := 0.0
 var _last_spawn_pos := Vector2.ZERO
 var _level_loading := false
 
 
 func _ready() -> void:
+	var cam: Camera2D = player.get_node_or_null("Camera2D") as Camera2D
+	if cam:
+		cam.position_smoothing_enabled = false
+		cam.make_current()
 	player.died.connect(_on_player_died)
 	combat.attack_performed.connect(_on_attack_performed)
 	await _start_level(DEFAULT_LEVEL)
@@ -41,7 +41,8 @@ func _start_level(level_name: String) -> void:
 	player.visible = true
 	if player.sprite:
 		player.sprite.visible = true
-	player._sync_position(Vector2.ZERO)
+	camera_layer.position = Vector2.ZERO
+	player._sync_position()
 	fog.reset()
 	_snap_camera_to_player()
 	_level_loading = false
@@ -49,25 +50,22 @@ func _start_level(level_name: String) -> void:
 
 
 func _snap_camera_to_player() -> void:
-	var screen_pos := IsoMath.world_to_screen(
-		player.world_position.x, player.world_position.y
-	)
-	camera_target = SCREEN_SIZE / 2.0 - screen_pos
-	camera_offset = camera_target
-	camera_layer.position = camera_offset
+	var cam: Camera2D = player.get_node_or_null("Camera2D") as Camera2D
+	if cam:
+		cam.position = Vector2.ZERO
+		cam.reset_smoothing()
 
 
 func _process(delta: float) -> void:
 	if GameState.paused or GameState.game_over or _level_loading or level == null:
 		return
 
-	_update_camera(delta)
-	camera_layer.position = camera_offset
-	player.update_player(delta, Vector2.ZERO)
+	player.update_player(delta)
 	player.world_position = level.clamp_world_pos(player.world_position)
-	player._sync_position(Vector2.ZERO)
+	player._sync_position()
 
 	fog.update_fog(player.world_position, delta)
+	_process_enemy_spawn(delta)
 
 	_update_enemy_highlight()
 	_handle_combat_input()
@@ -76,24 +74,21 @@ func _process(delta: float) -> void:
 	_sync_entity_projectiles()
 
 	player.restore_mana(5.0 * delta)
-	fog.camera_offset = Vector2.ZERO
 
 	if player.is_dead():
 		GameState.set_game_over(true)
+
+
+func _mouse_world_pos() -> Vector2:
+	# Та же система координат, что у player.position (CameraLayer / world_to_screen).
+	var layer_pos := player.get_global_mouse_position()
+	return IsoMath.layer_point_to_world(layer_pos)
 
 
 func _sync_entity_projectiles() -> void:
 	for c in projectiles.get_children():
 		if "world_position" in c:
 			c.position = IsoMath.world_to_screen(c.world_position.x, c.world_position.y)
-
-
-func _update_camera(_delta: float) -> void:
-	var screen_pos := IsoMath.world_to_screen(
-		player.world_position.x, player.world_position.y
-	)
-	camera_target = SCREEN_SIZE / 2.0 - screen_pos
-	camera_offset = camera_offset.lerp(camera_target, CAMERA_SMOOTH)
 
 
 func get_enemies() -> Array[GameEnemy]:
@@ -115,7 +110,7 @@ func _update_enemies(delta: float) -> void:
 			e.visible = false
 			continue
 		e.visible = true
-		var info: Dictionary = e.update_enemy(delta, pp, Vector2.ZERO)
+		var info: Dictionary = e.update_enemy(delta, pp)
 		if info.is_empty():
 			continue
 		if info.get("is_melee", true):
@@ -136,7 +131,7 @@ func _spawn_enemy_projectile(info: Dictionary) -> void:
 func _update_enemy_projectiles(delta: float) -> void:
 	for c in enemy_projectiles.get_children():
 		if c.has_method("update_projectile"):
-			if c.update_projectile(delta, Vector2.ZERO):
+			if c.update_projectile(delta):
 				c.queue_free()
 
 
@@ -144,8 +139,7 @@ func _handle_combat_input() -> void:
 	if Input.is_action_just_pressed("toggle_melee"):
 		combat.toggle_melee_mode()
 
-	var mouse_g := get_viewport().get_mouse_position()
-	var target_w := IsoMath.screen_to_world_on_layer(tile_world, mouse_g, camera_offset)
+	var target_w := _mouse_world_pos()
 
 	if Input.is_action_just_pressed("attack"):
 		combat.try_attack(player.world_position, target_w, get_enemies(), projectiles)
@@ -160,8 +154,7 @@ func _on_attack_performed(is_melee: bool, target_world: Vector2) -> void:
 
 
 func _update_enemy_highlight() -> void:
-	var mouse_g := get_viewport().get_mouse_position()
-	var mw := IsoMath.screen_to_world_on_layer(tile_world, mouse_g, camera_offset)
+	var mw := _mouse_world_pos()
 	for e: GameEnemy in get_enemies():
 		if is_instance_valid(e):
 			e.highlighted = e.check_mouse_hover(mw)
@@ -180,10 +173,6 @@ func _process_enemy_spawn(delta: float) -> void:
 	EnemySpawner.spawn_from_level(entities, level, pp, existing, GameState.max_enemies)
 	_last_spawn_pos = pp
 	_enemy_spawn_cooldown = GameState.enemy_spawn_frequency
-
-
-func _physics_process(delta: float) -> void:
-	_process_enemy_spawn(delta)
 
 
 func spawn_enemy_type(type_id: String, count: int = 1) -> void:
@@ -213,8 +202,6 @@ func restart_run() -> void:
 	player.is_attacking = false
 	player.walking = false
 
-	camera_offset = Vector2.ZERO
-	camera_target = Vector2.ZERO
 	camera_layer.position = Vector2.ZERO
 
 	kill_all_enemies()

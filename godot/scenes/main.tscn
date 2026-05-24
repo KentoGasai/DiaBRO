@@ -11,6 +11,7 @@ script = ExtResource("1_main")
 [node name="World" parent="." instance=ExtResource("2_world")]
 
 [node name="UI" type="CanvasLayer" parent="."]
+layer = 10
 
 [node name="HUD" parent="UI" instance=ExtResource("3_hud")]
 

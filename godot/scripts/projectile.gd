@@ -12,7 +12,7 @@ var _hit: bool = false
 
 func setup(
 	start: Vector2,
-	angle: float,
+	world_dir: Vector2,
 	p_damage: int,
 	speed: float,
 	p_range: float,
@@ -21,7 +21,10 @@ func setup(
 	world_position = start
 	damage = p_damage
 	max_range = p_range
-	velocity = Vector2(cos(angle), sin(angle)) * speed
+	if world_dir.length_squared() > 0.0001:
+		velocity = world_dir.normalized() * speed
+	else:
+		velocity = Vector2.ZERO
 	enemies = p_enemies
 	queue_redraw()
 

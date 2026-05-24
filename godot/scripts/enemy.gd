@@ -71,13 +71,13 @@ func _load_sprites(data: Dictionary) -> void:
 		sprite.visible = false
 
 
-func update_enemy(delta: float, player_pos: Vector2, camera_offset: Vector2) -> Dictionary:
+func update_enemy(delta: float, player_pos: Vector2) -> Dictionary:
 	is_moving = false
 	if dying:
 		death_time += delta
 		if death_time >= DEATH_DURATION:
 			is_dead = true
-		_sync_visual(camera_offset)
+		_sync_visual()
 		queue_redraw()
 		return {}
 	if is_dead:
@@ -111,7 +111,7 @@ func update_enemy(delta: float, player_pos: Vector2, camera_offset: Vector2) -> 
 	elif sprite.sprite_frames:
 		sprite.stop()
 
-	_sync_visual(camera_offset)
+	_sync_visual()
 	queue_redraw()
 	return attack_info
 
@@ -161,8 +161,8 @@ func check_mouse_hover(mouse_world: Vector2, radius: float = 1.0) -> bool:
 	return world_position.distance_to(mouse_world) <= radius
 
 
-func _sync_visual(camera_offset: Vector2) -> void:
-	position = IsoMath.world_to_screen(world_position.x, world_position.y) + camera_offset
+func _sync_visual() -> void:
+	position = IsoMath.world_to_screen(world_position.x, world_position.y)
 	if sprite and sprite.visible and sprite.sprite_frames:
 		var tex := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
 		if tex:

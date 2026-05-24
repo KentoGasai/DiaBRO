@@ -25,7 +25,19 @@ func screen_to_world_on_layer(
 	screen_pos: Vector2,
 	camera_layer_pos: Vector2
 ) -> Vector2:
-	return screen_to_world(screen_pos.x - camera_layer_pos.x, screen_pos.y - camera_layer_pos.y)
+	if camera_layer_pos.length_squared() > 0.0001:
+		return screen_to_world(screen_pos.x - camera_layer_pos.x, screen_pos.y - camera_layer_pos.y)
+	var cam := _get_active_camera()
+	if cam:
+		return cam.get_global_transform().affine_inverse() * screen_pos
+	return screen_to_world(screen_pos.x, screen_pos.y)
+
+
+func _get_active_camera() -> Camera2D:
+	var tree := Engine.get_main_loop()
+	if tree is SceneTree:
+		return (tree as SceneTree).root.get_viewport().get_camera_2d()
+	return null
 
 
 func world_to_global_on_layer(
@@ -67,6 +79,7 @@ func keyboard_to_world_vector() -> Vector2:
 	return Vector2.ZERO
 
 
+## Угол спрайта (8 направлений) из вектора в мировых тайлах — как game/player.py.
 func world_direction_to_sprite_angle(world_dir: Vector2) -> float:
 	if world_dir.length_squared() < 0.0001:
 		return 0.0
@@ -77,6 +90,16 @@ func world_direction_to_sprite_angle(world_dir: Vector2) -> float:
 
 func world_delta_to_sprite_angle(dx: float, dy: float) -> float:
 	return world_direction_to_sprite_angle(Vector2(dx, dy))
+
+
+## Мировые тайлы → точка на слое карты (для мыши / прицеливания).
+func world_to_aim_point(world_pos: Vector2) -> Vector2:
+	return world_to_screen(world_pos.x, world_pos.y)
+
+
+## Экран (слой CameraLayer) → мировые тайлы.
+func layer_point_to_world(layer_pos: Vector2) -> Vector2:
+	return screen_to_world(layer_pos.x, layer_pos.y)
 
 
 func visible_tile_radius(screen_size: Vector2) -> float:
