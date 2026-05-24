@@ -1,0 +1,67 @@
+[gd_scene load_steps=3 format=3 uid="uid://diabro_hud"]
+
+[ext_resource type="Script" path="res://scripts/hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://scripts/minimap.gd" id="2_minimap"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Margin" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="HealthBar" type="ProgressBar" parent="Margin"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 1020.0
+offset_right = 210.0
+offset_bottom = 1040.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="ManaBar" type="ProgressBar" parent="Margin"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 1045.0
+offset_right = 210.0
+offset_bottom = 1065.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="InfoLabel" type="Label" parent="Margin"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 500.0
+offset_bottom = 200.0
+theme_override_font_sizes/font_size = 20
+
+[node name="ControlsLabel" type="Label" parent="Margin"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 200.0
+offset_right = 450.0
+offset_bottom = 400.0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "WASD — движение | ЛКМ — атака | 2 — ближний/дальний | ESC — меню"
+
+[node name="Minimap" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -160.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 160.0
+grow_horizontal = 0
+mouse_filter = 2
+script = ExtResource("2_minimap")

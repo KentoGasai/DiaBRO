@@ -44,6 +44,16 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Godot 4 (порт)
+
+В репозитории есть версия на **Godot 4 + GDScript** в папке [`godot/`](godot/):
+
+1. Установите [Godot 4.2+](https://godotengine.org/download)
+2. Откройте `godot/project.godot` и нажмите **F5**
+3. После правок ассетов/JSON в Pygame: `godot/sync_data.ps1`
+
+Подробности: [godot/README.md](godot/README.md)
+
 ### Готовый exe
 
 Скачайте последний релиз из раздела [Releases](../../releases) — не требует установки Python!
@@ -103,6 +113,7 @@ python run_enemy_editor.py
 
 ```
 PyDiab/
+├── godot/               # Порт на Godot 4 (GDScript)
 ├── main.py              # Точка входа, игровой цикл
 ├── build.py             # Скрипт сборки exe
 ├── run_enemy_editor.py  # Запуск веб-редактора врагов

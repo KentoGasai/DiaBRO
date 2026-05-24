@@ -1,0 +1,35 @@
+[gd_scene load_steps=6 format=3 uid="uid://diabro_world"]
+
+[ext_resource type="Script" path="res://scripts/world.gd" id="1_world"]
+[ext_resource type="Script" path="res://scripts/tile_world.gd" id="2_tile"]
+[ext_resource type="Script" path="res://scripts/fog_of_war.gd" id="3_fog"]
+[ext_resource type="Script" path="res://scripts/combat_manager.gd" id="4_combat"]
+[ext_resource type="PackedScene" uid="uid://diabro_player" path="res://scenes/entities/player.tscn" id="5_player"]
+
+[node name="World" type="Node2D"]
+script = ExtResource("1_world")
+
+[node name="CameraLayer" type="Node2D" parent="."]
+
+[node name="TileWorld" type="TileMapLayer" parent="CameraLayer"]
+z_index = 0
+script = ExtResource("2_tile")
+
+[node name="FogOfWar" type="Node2D" parent="CameraLayer"]
+z_index = 1
+script = ExtResource("3_fog")
+
+[node name="Entities" type="Node2D" parent="CameraLayer"]
+z_index = 2
+y_sort_enabled = true
+
+[node name="Player" parent="CameraLayer/Entities" instance=ExtResource("5_player")]
+
+[node name="Projectiles" type="Node2D" parent="CameraLayer"]
+z_index = 3
+
+[node name="EnemyProjectiles" type="Node2D" parent="CameraLayer"]
+z_index = 3
+
+[node name="CombatManager" type="Node" parent="."]
+script = ExtResource("4_combat")

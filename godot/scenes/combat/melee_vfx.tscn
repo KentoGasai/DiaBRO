@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://diabro_melee_vfx"]
+
+[ext_resource type="Script" path="res://scripts/melee_vfx.gd" id="1_vfx"]
+
+[node name="MeleeVfx" type="Node2D"]
+script = ExtResource("1_vfx")
