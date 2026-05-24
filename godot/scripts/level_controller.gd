@@ -1,7 +1,6 @@
 class_name LevelController
 extends RefCounted
 ## Фиксированные уровни: JSON (tiles) или одноразовая генерация (generator).
-## Задел RPG: structures, triggers, loot_tables — в JSON уровня.
 
 const LEVELS_DIR := "res://data/levels/"
 
@@ -13,7 +12,7 @@ var spawn_points: Array = []
 var structures: Array = []
 var player_spawn: Vector2 = Vector2(32, 32)
 var bounds_min: Vector2 = Vector2(0.5, 0.5)
-var bounds_max: Vector2 = Vector2(62.5, 62.5)
+var bounds_max: Vector2 = Vector2(63.5, 63.5)
 
 
 func _init(level_name: String = "wilderness") -> void:
@@ -37,8 +36,8 @@ func load_level(level_name: String) -> bool:
 		return false
 
 	name = str(data.get("name", level_name))
-	width = int(data.get("width", 64))
-	height = int(data.get("height", 64))
+	width = maxi(1, int(data.get("width", 64)))
+	height = maxi(1, int(data.get("height", 64)))
 	_apply_bounds()
 
 	var src := str(data.get("source", "tiles"))
@@ -48,15 +47,20 @@ func load_level(level_name: String) -> bool:
 		var preset: String = str(gen_cfg.get("preset", "overworld"))
 		var generated := LevelGenerator.generate_level(width, height, p_seed, preset)
 		tiles = generated.get("tiles", {})
-		var gen_spawns: Array = generated.get("spawn_points", [])
-		spawn_points.append_array(gen_spawns)
+		spawn_points.append_array(generated.get("spawn_points", []))
 	else:
 		_load_tiles_from_json(data.get("tiles", {}))
+		_fill_missing_tiles()
 
+	player_spawn = Vector2(
+		floorf(float(width) * 0.5),
+		floorf(float(height) * 0.5)
+	)
 	if data.has("player_spawn"):
 		var ps: Array = data["player_spawn"]
 		if ps.size() >= 2:
 			player_spawn = Vector2(float(ps[0]), float(ps[1]))
+	player_spawn = get_spawn_position()
 
 	if data.has("spawn_points"):
 		for sp in data["spawn_points"]:
@@ -67,7 +71,6 @@ func load_level(level_name: String) -> bool:
 		structures = data["structures"]
 
 	_filter_spawn_away_from_player()
-	_compute_bounds_from_tiles()
 	return true
 
 
@@ -80,26 +83,24 @@ func _load_tiles_from_json(raw: Variant) -> void:
 			tiles[Vector2i(int(parts[0]), int(parts[1]))] = raw[key]
 
 
+func _fill_missing_tiles() -> void:
+	var default_tile := {"tileset": "grass_green_128x64", "tile": 0}
+	for x in range(width):
+		for y in range(height):
+			var pos := Vector2i(x, y)
+			if not tiles.has(pos):
+				tiles[pos] = default_tile
+
+
 func _apply_bounds() -> void:
-	bounds_min = Vector2(0.5, 0.5)
-	bounds_max = Vector2(float(width) - 0.5, float(height) - 0.5)
+	# Внутренний отступ от каменной кромки (генератор ставит stone на x=0/y=0/w-1/h-1)
+	var margin := 2.0
+	bounds_min = Vector2(margin, margin)
+	bounds_max = Vector2(float(width) - 1.0 - margin, float(height) - 1.0 - margin)
 
 
-func _compute_bounds_from_tiles() -> void:
-	if tiles.is_empty():
-		_apply_bounds()
-		return
-	var min_x := width
-	var min_y := height
-	var max_x := 0
-	var max_y := 0
-	for pos: Vector2i in tiles:
-		min_x = mini(min_x, pos.x)
-		min_y = mini(min_y, pos.y)
-		max_x = maxi(max_x, pos.x)
-		max_y = maxi(max_y, pos.y)
-	bounds_min = Vector2(float(min_x) + 0.5, float(min_y) + 0.5)
-	bounds_max = Vector2(float(max_x) + 0.5, float(max_y) + 0.5)
+func get_spawn_position() -> Vector2:
+	return clamp_world_pos(player_spawn)
 
 
 func _filter_spawn_away_from_player() -> void:

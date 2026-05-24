@@ -83,8 +83,8 @@ func _apply_velocity(delta: float, target_vel: Vector2) -> void:
 		velocity = velocity.normalized() * MAX_SPEED
 
 
-func _update_animation(delta: float) -> void:
-	if not sprite.sprite_frames:
+func _update_animation(_delta: float) -> void:
+	if not sprite or not sprite.sprite_frames:
 		return
 	var dir := SpriteSheetBuilder.angle_to_direction(
 		attack_sprite_angle if is_attacking else sprite_angle
@@ -98,11 +98,12 @@ func _update_animation(delta: float) -> void:
 		return
 	if walking:
 		var walk_anim := "walk_%d" % SpriteSheetBuilder.angle_to_direction(sprite_angle)
-		if sprite.animation != walk_anim:
+		if sprite.animation != walk_anim or not sprite.is_playing():
 			sprite.play(walk_anim)
 	else:
 		var idle := "walk_%d" % SpriteSheetBuilder.angle_to_direction(sprite_angle)
-		sprite.animation = idle
+		if sprite.animation != idle:
+			sprite.animation = idle
 		sprite.stop()
 		sprite.frame = 0
 
@@ -148,16 +149,16 @@ func is_dead() -> bool:
 
 
 func _sync_position(camera_offset: Vector2) -> void:
-	var inv_skip := invincibility_time > 0.0 and int(invincibility_time * 10) % 2 == 0
-	if inv_skip:
-		return
 	position = IsoMath.world_to_screen(world_position.x, world_position.y) + camera_offset
 	if sprite:
+		var blink_off := invincibility_time > 0.0 and int(invincibility_time * 10) % 2 == 0
+		sprite.visible = not blink_off
 		var fs := sprite.sprite_frames
-		if fs and fs.get_frame_count(sprite.animation) > 0:
-			var tex := fs.get_frame_texture(sprite.animation, sprite.frame)
-			if tex:
-				sprite.position = Vector2(-tex.get_width() * 0.5, -tex.get_height() * 0.75)
+		if fs and sprite.animation != "" and fs.has_animation(sprite.animation):
+			if fs.get_frame_count(sprite.animation) > 0:
+				var tex := fs.get_frame_texture(sprite.animation, sprite.frame)
+				if tex:
+					sprite.position = Vector2(-tex.get_width() * 0.5, -tex.get_height() * 0.75)
 
 
 func _draw() -> void:

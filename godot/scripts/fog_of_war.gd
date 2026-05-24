@@ -23,9 +23,16 @@ func reset() -> void:
 	queue_redraw()
 
 
+func _get_tile_map() -> TileMapLayer:
+	var p := get_parent()
+	if p:
+		return p.get_node_or_null("TileWorld") as TileMapLayer
+	return null
+
+
 func _draw() -> void:
 	var vp := get_viewport_rect().size
-	draw_fog_overlay(vp, camera_offset)
+	draw_fog_overlay(vp)
 
 
 func update_fog(player_pos: Vector2, _delta: float = 0.0) -> void:
@@ -61,19 +68,14 @@ func is_tile_visible(tx: int, ty: int) -> bool:
 	return visible_tiles.has(Vector2i(tx, ty))
 
 
-func _layer_screen_offset() -> Vector2:
-	var p := get_parent()
-	return p.position if p else Vector2.ZERO
-
-
-func draw_fog_overlay(screen_size: Vector2, _camera_offset: Vector2) -> void:
+func draw_fog_overlay(screen_size: Vector2) -> void:
 	if visible_tiles.is_empty():
 		return
+	var tile_map := _get_tile_map()
 	var half_w := TILE_W / 2.0
 	var half_h := TILE_H / 2.0
 	var vis_r: float = IsoMath.visible_tile_radius(screen_size)
 	var vis_r_sq: float = vis_r * vis_r
-	var layer_off := _layer_screen_offset()
 	var px := int(last_player_pos.x)
 	var py := int(last_player_pos.y)
 	var ri := int(vis_r) + 2
@@ -86,19 +88,18 @@ func draw_fog_overlay(screen_size: Vector2, _camera_offset: Vector2) -> void:
 			var key := Vector2i(tx, ty)
 			if visible_tiles.has(key):
 				continue
-			var sx: float = (tx - ty) * half_w
-			var sy: float = (tx + ty) * half_h
-			var screen_x: float = sx + layer_off.x
-			var screen_y: float = sy + layer_off.y
+			var top := IsoMath.tile_cell_top_local(tile_map, tx, ty)
+			var screen_x: float = top.x
+			var screen_y: float = top.y
 			if screen_x < -TILE_W * 2 or screen_x > screen_size.x + TILE_W * 2:
 				continue
 			if screen_y < -TILE_H * 2 or screen_y > screen_size.y + TILE_H * 2:
 				continue
 			var alpha: int = 140 if explored_tiles.has(key) else 200
 			var points := PackedVector2Array([
-				Vector2(sx, sy - half_h),
-				Vector2(sx + half_w, sy),
-				Vector2(sx, sy + half_h),
-				Vector2(sx - half_w, sy),
+				Vector2(screen_x, screen_y - half_h),
+				Vector2(screen_x + half_w, screen_y),
+				Vector2(screen_x, screen_y + half_h),
+				Vector2(screen_x - half_w, screen_y),
 			])
 			draw_colored_polygon(points, Color(0, 0, 0, alpha / 255.0))

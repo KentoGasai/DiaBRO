@@ -83,7 +83,8 @@ func _fill_grid(width: int, height: int) -> Dictionary:
 	for x in range(width):
 		for y in range(height):
 			var pos := Vector2i(x, y)
-			var on_edge := x == 0 or y == 0 or x == width - 1 or y == height - 1
+			# Кромка 1 тайл — камень; игровая зона внутри (совпадает с bounds в LevelController)
+			var on_edge := x == 0 or y == 0 or x >= width - 1 or y >= height - 1
 			var biome: BiomeData = edge_biome if on_edge else _get_biome(float(x), float(y))
 			tiles[pos] = biome.tile_dict()
 

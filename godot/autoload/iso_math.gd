@@ -1,5 +1,5 @@
 extends Node
-## Изометрические преобразования (порт game/isometric.py + main.py tile 128x64)
+## Изометрические преобразования (как game/isometric.py + main.py WASD).
 
 const TILE_WIDTH := 128.0
 const TILE_HEIGHT := 64.0
@@ -20,14 +20,38 @@ func screen_to_world(screen_x: float, screen_y: float) -> Vector2:
 	return Vector2(wx, wy)
 
 
-func world_to_global(world_pos: Vector2, camera_offset: Vector2) -> Vector2:
-	var s := world_to_screen(world_pos.x, world_pos.y)
-	return s + camera_offset
+func screen_to_world_on_layer(
+	_tile_map: TileMapLayer,
+	screen_pos: Vector2,
+	camera_layer_pos: Vector2
+) -> Vector2:
+	return screen_to_world(screen_pos.x - camera_layer_pos.x, screen_pos.y - camera_layer_pos.y)
 
 
-func global_to_world(global_pos: Vector2, camera_offset: Vector2) -> Vector2:
-	var local := global_pos - camera_offset
-	return screen_to_world(local.x, local.y)
+func world_to_global_on_layer(
+	_tile_map: TileMapLayer,
+	world_pos: Vector2,
+	camera_layer_pos: Vector2
+) -> Vector2:
+	return world_to_screen(world_pos.x, world_pos.y) + camera_layer_pos
+
+
+func global_to_world_on_layer(
+	tile_map: TileMapLayer,
+	screen_pos: Vector2,
+	camera_layer_pos: Vector2
+) -> Vector2:
+	return screen_to_world_on_layer(tile_map, screen_pos, camera_layer_pos)
+
+
+func tile_cell_top_local(tile_map: TileMapLayer, tx: int, ty: int) -> Vector2:
+	if tile_map == null:
+		return world_to_screen(float(tx), float(ty))
+	return tile_cell_screen_on_layer(tile_map, tx, ty)
+
+
+func tile_cell_foot_local(tile_map: TileMapLayer, tx: int, ty: int) -> Vector2:
+	return tile_cell_top_local(tile_map, tx, ty) + Vector2(0.0, HALF_H)
 
 
 func keyboard_to_world_vector() -> Vector2:
@@ -55,6 +79,49 @@ func world_delta_to_sprite_angle(dx: float, dy: float) -> float:
 	return world_direction_to_sprite_angle(Vector2(dx, dy))
 
 
-## Радиус тайлов вокруг игрока по размеру экрана (как level.draw / fog в Pygame)
 func visible_tile_radius(screen_size: Vector2) -> float:
 	return maxf(screen_size.x, screen_size.y) / HALF_W + 12.0
+
+
+## Аффинное совмещение локали TileMapLayer с world_to_screen (калибровка у центра карты).
+func fit_tilemap_to_iso(tile_map: TileMapLayer, center_x: int, center_y: int) -> Transform2D:
+	if tile_map == null:
+		return Transform2D.IDENTITY
+	var i0 := Vector2i(center_x, center_y)
+	var i1 := Vector2i(center_x + 1, center_y)
+	var i2 := Vector2i(center_x, center_y + 1)
+	var p0 := tile_map.map_to_local(i0)
+	var p1 := tile_map.map_to_local(i1)
+	var p2 := tile_map.map_to_local(i2)
+	var s0 := world_to_screen(float(i0.x), float(i0.y))
+	var s1 := world_to_screen(float(i1.x), float(i1.y))
+	var s2 := world_to_screen(float(i2.x), float(i2.y))
+	return _affine_from_three_points(p0, p1, p2, s0, s1, s2)
+
+
+func _affine_from_three_points(
+	p0: Vector2, p1: Vector2, p2: Vector2,
+	s0: Vector2, s1: Vector2, s2: Vector2
+) -> Transform2D:
+	var det := (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y)
+	if absf(det) < 0.0001:
+		return Transform2D.IDENTITY
+	var x_axis := Vector2(
+		((s1.x - s0.x) * (p2.y - p0.y) - (s2.x - s0.x) * (p1.y - p0.y)) / det,
+		((s1.y - s0.y) * (p2.y - p0.y) - (s2.y - s0.y) * (p1.y - p0.y)) / det
+	)
+	var y_axis := Vector2(
+		((s2.x - s0.x) * (p1.x - p0.x) - (s1.x - s0.x) * (p2.x - p0.x)) / det,
+		((s2.y - s0.y) * (p1.x - p0.x) - (s1.y - s0.y) * (p2.x - p0.x)) / det
+	)
+	var mapped_p0 := Vector2(x_axis.x * p0.x + y_axis.x * p0.y, x_axis.y * p0.x + y_axis.y * p0.y)
+	var origin := s0 - mapped_p0
+	return Transform2D(x_axis, y_axis, origin)
+
+
+## Позиция тайла на CameraLayer после выравнивания TileWorld.
+func tile_cell_screen_on_layer(tile_map: TileMapLayer, tx: int, ty: int) -> Vector2:
+	if tile_map == null:
+		return world_to_screen(float(tx), float(ty))
+	var local := tile_map.map_to_local(Vector2i(tx, ty))
+	return tile_map.transform * local

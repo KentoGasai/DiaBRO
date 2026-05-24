@@ -1,8 +1,7 @@
 extends Control
 
 const SIZE := 150
-const RADIUS := 200.0
-const TILE_PX := 5
+const VIEW_RADIUS_TILES := 30.0
 
 var _world: GameWorld
 var _refresh_accum := 0.0
@@ -34,26 +33,33 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+func _tile_px_for_level(level: LevelController) -> float:
+	var span := float(level.width + level.height)
+	return SIZE / maxf(span, 1.0)
+
+
 func _draw() -> void:
 	var world: GameWorld = _world
 	if world == null or not is_instance_valid(world):
 		return
 	var player: GamePlayer = world.player
-	if player == null:
+	if player == null or world.level == null:
 		return
 
 	draw_rect(Rect2(Vector2.ZERO, Vector2(SIZE, SIZE)), Color(0, 0, 0, 0.86))
 	draw_rect(Rect2(Vector2.ZERO, Vector2(SIZE, SIZE)), Color.WHITE, false, 2.0)
 
+	var level: LevelController = world.level
+	var tile_px: float = _tile_px_for_level(level)
 	var center := Vector2(SIZE / 2.0, SIZE / 2.0)
 	var pp: Vector2 = player.world_position
 	var fog: FogOfWar = world.fog
-	var level: LevelController = world.level
 	var explored: Dictionary = fog.explored_tiles
 	var visible: Dictionary = fog.visible_tiles
-	var radius_sq: float = RADIUS * RADIUS
+	var radius_sq: float = VIEW_RADIUS_TILES * VIEW_RADIUS_TILES
 
-	# Как в Pygame: только кэш level.tiles рядом с игроком + explored
+	_draw_level_outline(level, center, pp, tile_px)
+
 	var candidates: Array = []
 	for pos_variant in level.tiles:
 		var pos: Vector2i = pos_variant
@@ -75,17 +81,17 @@ func _draw() -> void:
 		var data: Dictionary = item["data"]
 		var dx: float = pos.x - pp.x
 		var dy: float = pos.y - pp.y
-		var iso_x: float = (dx - dy) * TILE_PX / 2.0
-		var iso_y: float = (dx + dy) * TILE_PX / 4.0
+		var iso_x: float = (dx - dy) * tile_px / 2.0
+		var iso_y: float = (dx + dy) * tile_px / 4.0
 		var px: float = center.x + iso_x
 		var py: float = center.y + iso_y
 		if px < 0.0 or px >= SIZE or py < 0.0 or py >= SIZE:
 			continue
 		var base: Color = _tile_color(str(data.get("tileset", "")))
 		if visible.has(pos):
-			_draw_mini_tile(px, py, base, 1.0)
+			_draw_mini_tile(px, py, tile_px, base, 1.0)
 		else:
-			_draw_mini_tile(px, py, base.darkened(0.5), 0.7)
+			_draw_mini_tile(px, py, tile_px, base.darkened(0.5), 0.7)
 
 	draw_circle(center, 4, Color(0.39, 0.7, 1.0))
 	draw_arc(center, 4, 0, TAU, 16, Color.WHITE, 1.0)
@@ -100,8 +106,8 @@ func _draw() -> void:
 		var edy: float = ep.y - pp.y
 		if edx * edx + edy * edy > radius_sq:
 			continue
-		var ix: float = (edx - edy) * TILE_PX / 2.0
-		var iy: float = (edx + edy) * TILE_PX / 4.0
+		var ix: float = (edx - edy) * tile_px / 2.0
+		var iy: float = (edx + edy) * tile_px / 4.0
 		var ex: float = center.x + ix
 		var ey: float = center.y + iy
 		if ex < 0.0 or ex >= SIZE or ey < 0.0 or ey >= SIZE:
@@ -109,11 +115,29 @@ func _draw() -> void:
 		draw_circle(Vector2(ex, ey), 3, Color.RED)
 
 
-func _draw_mini_tile(px: float, py: float, color: Color, alpha_mul: float) -> void:
+func _draw_level_outline(level: LevelController, center: Vector2, pp: Vector2, tile_px: float) -> void:
+	var corners: Array[Vector2i] = [
+		Vector2i(0, 0),
+		Vector2i(level.width - 1, 0),
+		Vector2i(0, level.height - 1),
+		Vector2i(level.width - 1, level.height - 1),
+	]
+	var pts := PackedVector2Array()
+	for c: Vector2i in corners:
+		var dx: float = float(c.x) - pp.x
+		var dy: float = float(c.y) - pp.y
+		var iso_x: float = (dx - dy) * tile_px / 2.0
+		var iso_y: float = (dx + dy) * tile_px / 4.0
+		pts.append(center + Vector2(iso_x, iso_y))
+	if pts.size() >= 3:
+		draw_colored_polygon(pts, Color(0.25, 0.25, 0.3, 0.35))
+
+
+func _draw_mini_tile(px: float, py: float, tile_px: float, color: Color, alpha_mul: float) -> void:
 	var c := color
 	c.a *= alpha_mul
-	var half := TILE_PX / 2.0
-	var quarter := TILE_PX / 4.0
+	var half := tile_px / 2.0
+	var quarter := tile_px / 4.0
 	var points := PackedVector2Array([
 		Vector2(px, py - quarter),
 		Vector2(px + half, py),

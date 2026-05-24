@@ -15,7 +15,7 @@ const DEFAULT_LEVEL := "wilderness"
 @onready var enemy_projectiles: Node2D = $CameraLayer/EnemyProjectiles
 @onready var fog: FogOfWar = $CameraLayer/FogOfWar
 
-var level := LevelController.new(DEFAULT_LEVEL)
+var level: LevelController
 var camera_offset := Vector2.ZERO
 var camera_target := Vector2.ZERO
 const CAMERA_SMOOTH := 0.18
@@ -36,21 +36,36 @@ func _start_level(level_name: String) -> void:
 	level = LevelController.new(level_name)
 	GameState.current_level_name = level_name
 	await tile_world.setup(level)
-	player.world_position = level.player_spawn
+	player.world_position = level.get_spawn_position()
 	player.velocity = Vector2.ZERO
+	player.visible = true
+	if player.sprite:
+		player.sprite.visible = true
+	player._sync_position(Vector2.ZERO)
 	fog.reset()
+	_snap_camera_to_player()
 	_level_loading = false
 	queue_redraw()
 
 
+func _snap_camera_to_player() -> void:
+	var screen_pos := IsoMath.world_to_screen(
+		player.world_position.x, player.world_position.y
+	)
+	camera_target = SCREEN_SIZE / 2.0 - screen_pos
+	camera_offset = camera_target
+	camera_layer.position = camera_offset
+
+
 func _process(delta: float) -> void:
-	if GameState.paused or GameState.game_over or _level_loading:
+	if GameState.paused or GameState.game_over or _level_loading or level == null:
 		return
 
 	_update_camera(delta)
 	camera_layer.position = camera_offset
 	player.update_player(delta, Vector2.ZERO)
 	player.world_position = level.clamp_world_pos(player.world_position)
+	player._sync_position(Vector2.ZERO)
 
 	fog.update_fog(player.world_position, delta)
 
@@ -74,8 +89,10 @@ func _sync_entity_projectiles() -> void:
 
 
 func _update_camera(_delta: float) -> void:
-	var target_screen := IsoMath.world_to_screen(player.world_position.x, player.world_position.y)
-	camera_target = SCREEN_SIZE / 2.0 - target_screen
+	var screen_pos := IsoMath.world_to_screen(
+		player.world_position.x, player.world_position.y
+	)
+	camera_target = SCREEN_SIZE / 2.0 - screen_pos
 	camera_offset = camera_offset.lerp(camera_target, CAMERA_SMOOTH)
 
 
@@ -128,7 +145,7 @@ func _handle_combat_input() -> void:
 		combat.toggle_melee_mode()
 
 	var mouse_g := get_viewport().get_mouse_position()
-	var target_w := IsoMath.global_to_world(mouse_g, camera_offset)
+	var target_w := IsoMath.screen_to_world_on_layer(tile_world, mouse_g, camera_offset)
 
 	if Input.is_action_just_pressed("attack"):
 		combat.try_attack(player.world_position, target_w, get_enemies(), projectiles)
@@ -144,7 +161,7 @@ func _on_attack_performed(is_melee: bool, target_world: Vector2) -> void:
 
 func _update_enemy_highlight() -> void:
 	var mouse_g := get_viewport().get_mouse_position()
-	var mw := IsoMath.global_to_world(mouse_g, camera_offset)
+	var mw := IsoMath.screen_to_world_on_layer(tile_world, mouse_g, camera_offset)
 	for e: GameEnemy in get_enemies():
 		if is_instance_valid(e):
 			e.highlighted = e.check_mouse_hover(mw)
@@ -217,13 +234,13 @@ func _on_player_died() -> void:
 
 
 func _level_screen_rect() -> Rect2:
-	var w := float(level.width)
-	var h := float(level.height)
+	var w := level.width - 1
+	var h := level.height - 1
 	var corners: Array[Vector2] = [
-		IsoMath.world_to_screen(0.0, 0.0),
-		IsoMath.world_to_screen(w, 0.0),
-		IsoMath.world_to_screen(0.0, h),
-		IsoMath.world_to_screen(w, h),
+		IsoMath.tile_cell_top_local(tile_world, 0, 0),
+		IsoMath.tile_cell_top_local(tile_world, w, 0),
+		IsoMath.tile_cell_top_local(tile_world, 0, h),
+		IsoMath.tile_cell_top_local(tile_world, w, h),
 	]
 	var mn := corners[0]
 	var mx := corners[0]

@@ -34,20 +34,36 @@ func build_from_level() -> void:
 	)
 
 	var placed := 0
+	var skipped := 0
 	for pos_variant in order:
 		var pos: Vector2i = pos_variant
-		_place_cell(pos, level.tiles[pos])
-		placed += 1
-		if placed % CELLS_PER_FRAME == 0:
+		if _place_cell(pos, level.tiles[pos]):
+			placed += 1
+		else:
+			skipped += 1
+		if (placed + skipped) % CELLS_PER_FRAME == 0:
 			await get_tree().process_frame
 
+	if skipped > 0:
+		push_warning("TileWorld: не размещено тайлов: %d из %d" % [skipped, level.tiles.size()])
 
-func _place_cell(pos: Vector2i, data: Dictionary) -> void:
+	_align_to_iso_space()
+
+
+func _align_to_iso_space() -> void:
+	position = Vector2.ZERO
+	var cx := level.width / 2
+	var cy := level.height / 2
+	transform = IsoMath.fit_tilemap_to_iso(self, cx, cy)
+
+
+func _place_cell(pos: Vector2i, data: Dictionary) -> bool:
 	var key := _tile_key(data)
 	var info: Dictionary = _tile_lookup.get(key, {})
 	if info.is_empty():
-		return
+		return false
 	set_cell(pos, int(info["source_id"]), info["atlas"] as Vector2i)
+	return true
 
 
 func _build_tileset() -> void:
@@ -55,7 +71,8 @@ func _build_tileset() -> void:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
 	ts.tile_size = Vector2i(TILE_W, TILE_H)
-	ts.tile_layout = TileSet.TILE_LAYOUT_STACKED
+	# Линейная сетка без stagger — проще совместить с world_to_screen
+	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_RIGHT
 
 	var dir := DirAccess.open(TEXTURES_DIR)
 	if not dir:
